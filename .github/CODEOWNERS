@@ -1,0 +1,10 @@
+# Default reviewer for each folder.
+# Replace @username placeholders with real GitHub usernames.
+
+/api/        @backend-username
+/worker/     @backend-username
+/web/        @frontend-username
+/prompts/    @llm-username
+/eval/       @ds-username
+/data/       @de-username
+/schemas/    @backend-username @llm-username
