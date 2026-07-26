@@ -1,10 +1,37 @@
 # Default reviewer for each folder.
 # Replace @username placeholders with real GitHub usernames.
+#   Data Engineer   -> @muyesser10
+#   LLM Engineer    -> @Cagri12345
+#   Data Scientist  -> @MehmetTayyip
+#   Backend+Frontend  -> @bariss9 @nursenakyga
 
-/api/        @backend-username
-/worker/     @backend-username
-/web/        @frontend-username
-/prompts/    @llm-username
-/eval/       @ds-username
-/data/       @de-username
-/schemas/    @backend-username @llm-username
+# --- Backend + Frontend
+/api/                   @bariss9 @nursenakyga
+/web/                   @bariss9 @nursenakyga
+/migrations/            @bariss9 @nursenakyga
+/monitoring/            @bariss9 @nursenakyga
+
+
+/worker/                        @bariss9 @nursenakyga
+/worker/masking/llm_sanity.py   @Cagri12345 @bariss9 @nursenakyga
+/worker/classification/         @Cagri12345 @bariss9 @nursenakyga
+/worker/extraction/             @Cagri12345 @bariss9 @nursenakyga
+/worker/embedding/              @Cagri12345 @bariss9 @nursenakyga
+
+/prompts/               @Cagri12345
+
+
+/data/                  @muyesser10
+/replay/                @muyesser10
+
+
+/eval/                  @MehmetTayyip
+
+
+/schemas/               @bariss9 @nursenakyga @Cagri12345 @muyesser10 @MehmetTayyip
+docker-compose.yml      @bariss9 @nursenakyga
+.env.example            @bariss9 @nursenakyga @Cagri12345
+/docs/STATUS.md         @bariss9 @nursenakyga @Cagri12345 @muyesser10 @MehmetTayyip
+
+
+
