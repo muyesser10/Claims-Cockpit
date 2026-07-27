@@ -1,6 +1,10 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+
+from api.routers import ingest, claims
+
+
 app = FastAPI(
      title = "Claims-Cockpit API",
      version = "0.1.1"
@@ -14,6 +18,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(ingest.router)
+app.include_router(claims.router)
+
+
 
 @app.get("/health")
 def health():
