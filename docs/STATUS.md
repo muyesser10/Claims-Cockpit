@@ -3,59 +3,57 @@
 > Bu dosya **canlı** durumu tutar; sık güncellenir. CLAUDE.md sabit kurallardır, bu dosya
 > "şu an neredeyiz" sorusunun cevabıdır. Her Claude Code oturumu işe başlamadan bunu okur.
 >
-> **Güncelleme kuralı:** İş biten kişi, PR'ında bu dosyayı da günceller (kısa tut). Uzun
-> geçmiş yazma; "şu an ne durumda + sırada ne var + neler bloke" yeterli. Detaylı günlük
-> kayıt için `docs/standups/` kullan.
+> **Güncelleme kuralı:** İş biten kişi, PR'ında bu dosyayı da günceller (kısa tut).
 
 ---
 
 ## ÖZET (bir bakışta)
 
-- **Faz:** Kurulum tamamlandı, Sprint 1 henüz **başlamadı**.
-- **Aktif sprint:** — (Sprint 1 başlamak üzere)
-- **Repo durumu:** Saf iskelet (scaffold). Gerçek kod yok; klasörler `.gitkeep` ile boş.
-- **Son büyük olay:** Scaffold + CI + compose + .env.example kuruldu (repo sahibi tarafından).
-- **Sıradaki iş:** Sprint 1 Gün 1 — compose'da api/worker/web servislerini aç, FastAPI iskelet + `/health`, Vite kurulum.
+- **Faz:** Sprint 1 devam ediyor. Backend (api) katmanı ayakta ve çalışıyor.
+- **Aktif sprint:** Sprint 1
+- **Repo durumu:** api servisi + veritabanı şeması + ingest/claims endpoint'leri hazır. external_ref (GT eşleştirme) eklendi. Worker/web/ollama henüz yok.
+- **Son büyük olay:** api iskeleti, Alembic migration (6 tablo + external_ref, VECTOR 384), /ingest + /claims çalışıyor. LLM Engineer istekleri (external_ref, damage_type, source offset, received_at override) uygulandı.
+- **Sıradaki iş (BE):** Masking v1 (regex + basit isim listesi).
 
 ---
 
-## HAZIR OLANLAR (scaffold)
+## HAZIR OLANLAR
 
-- [x] Dizin yapısı (api, worker, web, migrations, prompts, data, replay, eval, schemas, monitoring, docs)
-- [x] `docker-compose.yml` — db + redis tanımlı ve healthcheck'li; api/worker/web **yorum satırında** (Sprint 1'de açılacak)
-- [x] `.env.example` — LLM router (Groq+Gemini+Ollama), embedding (384), DB, Redis, JWT, DEMO_OFFLINE hepsi tanımlı
-- [x] `pyproject.toml` — ruff (line-length 100, py311) + pytest yapılandırması
-- [x] `requirements.txt` — temel bağımlılıklar (fastapi, sqlalchemy, alembic, psycopg3, redis, httpx)
-- [x] CI (`.github/workflows/ci.yml`) — ruff lint + format + pytest + gitleaks secret taraması
-- [x] Şablonlar — ADR, standup, issue (bug/task), PR template
-- [x] `CLAUDE.md` + `docs/STATUS.md` (bu dosya)
-- [x] `CODEOWNERS` gerçek kullanıcı adlarıyla dolduruldu (5 kişi)
+- [x] Dizin yapısı (scaffold)
+- [x] `docker-compose.yml` — db + redis + **api çalışıyor**; worker/web/ollama hâlâ bekleniyor -> @nursenakyga
+- [x] `.env.example` + `.env` (lokal)
+- [x] CI (ruff + gitleaks) + izin düzeltmesi (pull-requests read)
+- [x] `CLAUDE.md`, `docs/STATUS.md`, `CODEOWNERS`
+- [x] **`schemas/claim.json`** — damage_type final (collision|single_vehicle|glass|hail|fire|theft|animal|other), source_references offset yapılı ({quote,start,end}), status sistem alanı, city/district, ISO tarih, nullable number
+- [x] **Alembic migration** — 6 tablo + `external_ref` kolonu: raw_messages, claims, audit_trail, mask_mappings, claim_embeddings (**VECTOR 384**), users
+- [x] **SQLAlchemy modelleri** + senkron DB session
+- [x] **`/health`**, **`/ingest`** (external_ref + received_at override destekli), **`/claims`** endpoint'leri
+- [x] Redis client + kuyruk (`claims:incoming`)
+- [x] Pydantic modelleri
 
 ## HENÜZ YAPILMADI
 
-- [ ] `schemas/claim.json` **oluşturulmadı** (Sprint 1 Gün 2 şema oturumunda donacak)
-- [ ] Hiçbir Python/TS kodu yazılmadı
-- [ ] Migration yok
-- [ ] Prompt'lar yok
-- [ ] Sentetik veri yok
+- [ ] **Masking v1** (regex + isim listesi) — @bariss9, sıradaki
+- [ ] source_references offset hesabı (pipeline `text.find(quote)` — worker gelince)
+- [ ] Worker iskeleti + pipeline @nursenakyga — received_at'i extraction'a geçirecek
+- [ ] LLM router @Cagri12345
+- [ ] Sentetik veri + replay  @muyesser10
+- [ ] `schemas/claim.json` nihai "dondu" işareti (external_ref eklendiği için hâlâ oturuyor)
 
 ---
 
 ## SPRINT İLERLEMESİ
 
-### Sprint 1 — İskelet + İlk Uçtan Uca  —  DURUM: başlamadı
-Hedef: `docker compose up` ile tüm servisler ayakta; `/ingest` → Redis → worker pipeline (v0)
-→ Postgres → Pano'da görünür. Şema Gün 2'de donar.
-
-- [ ] compose api/worker/web servisleri açıldı, hepsi healthy
-- [ ] FastAPI iskelet + `/health`
-- [ ] Vite + shadcn + Layout + 5 rota
-- [ ] `schemas/claim.json` donduruldu (Gün 2)
-- [ ] Alembic migration 0001 (VECTOR(384) dahil)
-- [ ] `/ingest` + `/ihbarlar` endpoint'leri
-- [ ] worker pipeline v0 (masking→classification→extraction→validation stub'ları)
-- [ ] LLM router entegre, ilk gerçek çağrılar
-- [ ] Pano iskelet, canlı veri akıyor
+### Sprint 1 — İskelet + İlk Uçtan Uca  —  DURUM: devam ediyor
+- [x] compose api servisi, api+db+redis healthy
+- [x] FastAPI iskelet + `/health`
+- [x] `schemas/claim.json` (LLM+DE geri bildirimiyle güncel)
+- [x] Alembic migration (VECTOR 384 + external_ref)
+- [x] `/ingest` + `/claims` endpoint'leri
+- [ ] Masking regex + isim sözlüğü v0 (BE — sıradaki)
+- [ ] Worker pipeline v0 (Dev2)
+- [ ] LLM router entegre (LLM Engineer)
+- [ ] Vite + Pano iskelet
 - [ ] Sprint 1 demo
 
 ### Sprint 2 — Kuyruk + Pano Tam + Masking v2  —  DURUM: başlamadı
@@ -66,31 +64,29 @@ Hedef: `docker compose up` ile tüm servisler ayakta; `/ingest` → Redis → wo
 
 ## BİLİNEN BAĞIMLILIKLAR / BEKLEYENLER
 
-Kim kimi bekliyor (güncel tut — biri teslim edince satırı kaldır/işaretle):
-
 | Bekleyen | Beklenen şey | Kimden | Durum |
 |----------|--------------|--------|-------|
-| Backend ikilisi | LLM router (`worker/llm_router`) + adapter'ler | LLM Engineer | bekliyor |
-| Backend ikilisi | Sentetik test verisi (20-30 metin) | Data Engineer | bekliyor |
-| LLM + DS | `schemas/claim.json` donması | Backend ikilisi (Gün 2 oturumu) | bekliyor |
-| Frontend | `/istatistik/ozet` OpenAPI şeması | Backend (Sprint 2) | henüz sırada değil |
-| DS | `denetim_izi` tablosuna erişim | Backend | henüz sırada değil |
+| Backend ikilisi | LLM router | @Cagri12345 | bekliyor |
+| Backend ikilisi | Sentetik test verisi + replay | @muyesser10 | bekliyor |
+| DS + LLM | Worker pipeline (received_at → extraction, offset hesabı) | @nursenakyga | bekliyor |
 
 ---
 
 ## BİLİNEN SORUNLAR / RİSKLER
 
-- Groq rate limit (30 req/dk) — yoğun eval'de router'ın Gemini fallback'i devrede olmalı.
-- Windows kullanıcı adında Türkçe karakter olan geliştiricilerde SSH sorunu olabildi; HTTPS+token veya düzgün yol ile klonlama tercih edildi.
+- `.env.example` `DATABASE_URL` `postgresql://` ile başlıyor; kod psycopg v3 için `+psycopg`'ye çeviriyor (database.py + env.py `.replace`). İleride `.env.example`'ı doğrudan düzeltmek ekiple konuşulacak.
+- Yerel Postgres çakışması (bariss9): db `docker-compose.override.yml` ile 5433'te (kişisel).
+- Groq rate limit — router Gemini fallback devrede olmalı.
 
 ---
 
-## KARAR GEÇMİŞİ (kısa — detay `docs/decisions/` ADR'lerde)
+## KARAR GEÇMİŞİ (kısa)
 
-- Sıfır maliyet stratejisi: bulut premium LLM yerine Groq+Gemini+Ollama üçlü router. (scaffold'da yansıtıldı)
-- Embedding yerel (sentence-transformers, 384) — text-embedding değil.
-- SQLAlchemy senkron (psycopg3) — async değil.
-- Python 3.11.
+- İsimler İngilizce (endpoint/kod/dosya); yorumlar İngilizce; prompt Türkçe; config ASCII.
+- claim.json: damage_type 8 değer + single_vehicle + glass; source_references offset'li {quote,start,end} (offset'i pipeline hesaplar, LLM sadece quote verir); status sistem alanı; city/district; estimated_amount nullable number; incident_date ISO.
+- external_ref: GT eşleştirme için ingest'e opsiyonel alan (raw_messages.external_ref). received_at override: GT'de sabit zaman verilebilir (eval tekrar edilebilirliği).
+- Sıfır maliyet: Groq+Gemini+Ollama; embedding yerel 384.
+- SQLAlchemy senkron (psycopg3); Python 3.11; migration hakkı backend ikilisinde.
 
 ---
 

@@ -4,6 +4,9 @@
 *.pem
 *.key
 
+# Local overrides (personal, not committed)
+docker-compose.override.yml
+
 # Python
 __pycache__/
 *.py[cod]

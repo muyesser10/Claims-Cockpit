@@ -1,0 +1,22 @@
+{
+  "channel": "email | call_transcript | web_form",
+  "content_type": "claim | info_request | irrelevant",
+  "urgency": "critical | high | normal",
+  "policy_no": "string | null",
+  "plate": "string | null",
+  "incident_date": "ISO date string (YYYY-MM-DD) | null",
+  "incident_location": {
+    "city": "string | null",
+    "district": "string | null"
+  },
+  "damage_description": "free text | null",
+  "damage_type": "collision | single_vehicle | glass | hail | fire | theft | animal | other | null",
+  "injury": "true | false | null",
+  "counterparty_exists": "true | false | null",
+  "estimated_amount": "number | null",
+  "source_references": {
+    "policy_no": { "quote": "string", "start": "int", "end": "int" },
+    "incident_date": { "quote": "string", "start": "int", "end": "int" },
+    "estimated_amount": { "quote": "string", "start": "int", "end": "int" }
+  }
+}
