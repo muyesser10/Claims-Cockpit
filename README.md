@@ -58,4 +58,12 @@ docs/       Standup notes, ADRs, runbook, compliance notes
 - `main` must be demoable at all times
 - Schema/contract changes carry a `[SCHEMA CHANGE]` tag in the PR title
 
-Details: the `docs/` folder and the team's master guide (shared in Drive).
+## Documentation
+
+Team process docs live in Google Drive (meeting notes, role guides, trackers):
+**[Claims Cockpit — Drive] https://drive.google.com/drive/u/1/folders/15QMNDnCfpY6YUFHVDwYO7qy8BLV1RfKr
+
+
+Code-level rules and project status live in the repo: `CLAUDE.md` and `docs/STATUS.md`.
+
+
