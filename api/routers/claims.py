@@ -1,11 +1,11 @@
 # api/routers/claims.py
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import select, func
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from api.database import get_db
 from api.models.db import Claim
-from api.models.schemas import ClaimOut, ClaimListOut
+from api.models.schemas import ClaimListOut, ClaimOut
 
 router = APIRouter(prefix="/claims", tags=["claims"])
 

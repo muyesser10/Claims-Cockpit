@@ -1,5 +1,6 @@
 # api/redis_client.py
 import os
+
 import redis
 
 REDIS_URL = os.environ["REDIS_URL"]
