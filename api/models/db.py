@@ -17,6 +17,7 @@ class RawMessage(Base):
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     channel: Mapped[str] = mapped_column(String(32))
     raw_text: Mapped[str] = mapped_column(Text)
+    external_ref: Mapped[str | None] = mapped_column(String(64), nullable=True)
     received_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now())
     status: Mapped[str] = mapped_column(String(32), default="received")

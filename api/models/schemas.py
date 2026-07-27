@@ -6,6 +6,8 @@ from datetime import datetime
 class IngestRequest(BaseModel):
     channel: str
     raw_text: str
+    external_ref: str | None = None
+    received_at: datetime | None = None
 
 # Sending response back to the user after ingesting a message
 class IngestResponse(BaseModel):

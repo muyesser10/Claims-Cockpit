@@ -13,7 +13,14 @@ router = APIRouter(prefix="/ingest", tags=["ingest"])
 @router.post("", response_model=IngestResponse, status_code=202)
 def ingest(payload: IngestRequest, db: Session = Depends(get_db)):
     """Accept a new raw message, store it, enqueue for the worker."""
-    msg = RawMessage(channel=payload.channel, raw_text=payload.raw_text)
+    msg = RawMessage(
+        channel=payload.channel, 
+        raw_text=payload.raw_text,
+        external_ref=payload.external_ref,
+    )
+    if payload.received_at is not None:
+        msg.received_at = payload.received_at
+        
     db.add(msg)
     db.commit()
     db.refresh(msg)

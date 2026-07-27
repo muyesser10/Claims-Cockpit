@@ -10,13 +10,13 @@
     "district": "string | null"
   },
   "damage_description": "free text | null",
-  "damage_type": "collision | hail | fire | theft | animal | other | null",
+  "damage_type": "collision | single_vehicle | glass | hail | fire | theft | animal | other | null",
   "injury": "true | false | null",
   "counterparty_exists": "true | false | null",
   "estimated_amount": "number | null",
   "source_references": {
-    "policy_no": "quote from source text | null",
-    "incident_date": "quote from source text | null",
-    "estimated_amount": "quote from source text | null"
+    "policy_no": { "quote": "string", "start": "int", "end": "int" },
+    "incident_date": { "quote": "string", "start": "int", "end": "int" },
+    "estimated_amount": { "quote": "string", "start": "int", "end": "int" }
   }
 }
