@@ -13,7 +13,8 @@ def log_audit_trail(
     if details is None:
         details = {}
     logger.info(
-        f"AUDIT | message_id: {claim_id} | step: {step_name} | status: {status} | details: {details}"
+        f"AUDIT | message_id: {claim_id} | step: {step_name} | "
+        f"status: {status} | details: {details}"
     )
 
 

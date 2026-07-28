@@ -54,8 +54,10 @@ def main():
                 continue
 
             processed_claim = run_pipeline(claim_data)
+            msg_id = processed_claim.get("id", processed_claim.get("external_ref"))
             logger.info(
-                f"Processing completed | message_id: {processed_claim.get('id', processed_claim.get('external_ref'))} | Final Status: {processed_claim.get('status')}"
+                f"Processing completed | message_id: {msg_id} | "
+                f"Final Status: {processed_claim.get('status')}"
             )
 
         except redis.ConnectionError:
