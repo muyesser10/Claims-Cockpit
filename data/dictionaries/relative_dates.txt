@@ -1,0 +1,9 @@
+dün|1
+önceki gün|2
+üç gün önce|3
+dört gün önce|4
+beş gün önce|5
+bir hafta önce|7
+on gün önce|10
+birkaç gün önce|3
+geçen hafta|7

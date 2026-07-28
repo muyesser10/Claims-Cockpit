@@ -55,6 +55,8 @@
 - [x] FastAPI iskelet + `/health`
 - [x] `schemas/claim.json`
 - [x] Alembic migration (VECTOR 384 + external_ref)
+
+
 - [x] `/ingest` + `/claims` + `/claims/{id}`
 - [x] **Masking v1 (S1-4)**
 - [x] GT üreteci (S1-1)
@@ -62,7 +64,12 @@
 - [ ] LLM router (S1-15)
 - [ ] web/ Vite iskeleti + Pano (S1-13/S1-8)
 - [ ] text_generator (ihbar metinleri)
+- [x] Türkçe cümle bölücü (S1-3)
+- [x] e-posta üreteci (S1-2)
+
 - [ ] Sprint 1 demo
+
+
 
 ### Sprint 2 — Kuyruk + Pano Tam + Masking v2  —  DURUM: başlamadı
 ### Sprint 3 — Auth + RAG + Observability  —  DURUM: başlamadı
