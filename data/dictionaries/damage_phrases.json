@@ -1,0 +1,79 @@
+{
+  "collision": [
+    "ön tampon başka bir araçla çarpışma sonucu göçtü",
+    "arkadan gelen bir araç arka tampona çarptı",
+    "sağ ön kapı çarpma sonucu içeri göçtü",
+    "sol ön çamurluk ezildi ve far kırıldı",
+    "kavşakta yandan çarpma sonucu sağ panel hasar gördü",
+    "kırmızı ışıkta beklerken arkadan çarpma oldu",
+    "şerit değiştiren bir araç sol taraftan çarptı",
+    "çarpışma sonucu ön tampon ve kaput ciddi hasar aldı",
+    "kavşaktaki çarpışmada sağ far ve sinyal kırıldı",
+    "park halindeyken manevra yapan bir araç kapıya vurdu",
+    "arkadan çarpma sonucu bagaj kapağı kapanmaz oldu",
+    "yan çarpışmada sol arka kapı ve jant hasar gördü"
+  ],
+  "single_vehicle": [
+    "kaldırıma çarpma sonucu sağ ön jant eğildi",
+    "bariyere sürtme sonucu sol taraf boydan boya çizildi",
+    "aydınlatma direğine çarpma sonucu ön kaput göçtü",
+    "refüje çıkma sonucu alt takım hasar gördü",
+    "buzlu yolda kayma sonucu sağ taraf duvara sürttü",
+    "virajı alamama sonucu bariyere çarpıldı ve ön tampon parçalandı",
+    "geri manevrada duvara çarpma sonucu arka tampon çatladı",
+    "rampada kayma sonucu ön tampon bordüre çarptı",
+    "çukura girme sonucu jant ve lastik hasar gördü"
+  ],
+  "glass": [
+    "taş çarpması sonucu ön camda çatlak oluştu ve büyüdü",
+    "bir cisim çarpması sonucu yan cam kırıldı",
+    "arka cam tamamen parçalandı",
+    "ön camdaki çatlak sürüş güvenliğini etkiler hale geldi",
+    "otoyolda sıçrayan taş ön camı çatlattı",
+    "sol ön kapı camı kırıldı",
+    "ön cam alt kısmında yıldız şeklinde çatlak oluştu",
+    "tavan camı (sunroof) çatladı"
+  ],
+  "hail": [
+    "dolu yağışı sonucu kaputta çok sayıda göçük oluştu",
+    "dolu nedeniyle tavan, kaput ve bagajda göçükler oluştu",
+    "şiddetli dolu sonucu araç genelinde göçük meydana geldi",
+    "dolu yağışı sonrası tüm yatay yüzeylerde göçük oluştu",
+    "aniden bastıran dolu kaputu ve tavanı göçürdü",
+    "dolu vurması sonucu boyada ve saçta hasar oluştu"
+  ],
+  "fire": [
+    "motor bölümünde yangın çıktı",
+    "elektrik kontağı sonucu araçta yangın başladı",
+    "ön kaput altından duman ve alev yükseldi",
+    "park halindeyken motor kısmı alev aldı",
+    "kısa devre sonucu gösterge paneli yandı",
+    "yakıt sızıntısı sonucu motor bölümünde yangın çıktı"
+  ],
+  "theft": [
+    "park halindeyken tamamen çalındı",
+    "camı kırılarak içindeki eşyalar çalındı",
+    "teyp ve navigasyon ünitesi sökülerek çalındı",
+    "akü ve yedek lastik çalındı",
+    "kapı kilidi zorlanarak araç içi karıştırıldı",
+    "otoparktan çalındı",
+    "yan ayna ve farlar sökülerek çalındı"
+  ],
+  "animal": [
+    "yola aniden çıkan bir hayvana çarpıldı",
+    "önüne atlayan bir köpek nedeniyle ön tampon hasar gördü",
+    "sürüden ayrılan bir hayvana çarpma sonucu far kırıldı",
+    "gece yolda bir yaban domuzuna çarpıldı",
+    "motor bölümüne giren bir kedi kabloları kemirdi",
+    "bir ineğe çarpma sonucu ön kaput ve ızgara göçtü"
+  ],
+  "other": [
+    "sel suları nedeniyle motor su aldı ve çalışmaz oldu",
+    "üzerine düşen ağaç dalı sonucu tavan göçtü",
+    "park halindeyken bilinmeyen bir araç sürtüp kaçtı",
+    "fırtınada uçan bir cisim ön kaputa zarar verdi",
+    "yol çalışmasından sıçrayan malzeme boyayı hasarladı",
+    "açık rögar kapağı nedeniyle alt takım zarar gördü",
+    "otopark tavanından düşen sıva araca zarar verdi"
+  ]
+}

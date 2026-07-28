@@ -50,11 +50,17 @@
 - [x] `schemas/claim.json` (LLM+DE geri bildirimiyle güncel)
 - [x] Alembic migration (VECTOR 384 + external_ref)
 - [x] `/ingest` + `/claims` endpoint'leri
+- [x] schemas/claim.json donduruldu (Gün 2)
+- [x] gt_generator gerçek şemayla (S1-1)
+- [x] Türkçe cümle bölücü (S1-3)
+- [x] e-posta üreteci (S1-2)
 - [ ] Masking regex + isim sözlüğü v0 (BE — sıradaki)
 - [ ] Worker pipeline v0 (Dev2)
 - [ ] LLM router entegre (LLM Engineer)
 - [ ] Vite + Pano iskelet
 - [ ] Sprint 1 demo
+
+
 
 ### Sprint 2 — Kuyruk + Pano Tam + Masking v2  —  DURUM: başlamadı
 ### Sprint 3 — Auth + RAG + Observability  —  DURUM: başlamadı
