@@ -9,55 +9,64 @@
 
 ## ÖZET (bir bakışta)
 
-- **Faz:** Sprint 1 devam ediyor. Backend (api) katmanı ayakta ve çalışıyor.
+- **Faz:** Sprint 1 devam ediyor. api + masking + veri üreteci hazır. 6 servis tanımlı ama worker boş döngü, web entry point'siz.
 - **Aktif sprint:** Sprint 1
-- **Repo durumu:** api servisi + veritabanı şeması + ingest/claims endpoint'leri hazır. external_ref (GT eşleştirme) eklendi. Worker/web/ollama henüz yok.
-- **Son büyük olay:** api iskeleti, Alembic migration (6 tablo + external_ref, VECTOR 384), /ingest + /claims çalışıyor. LLM Engineer istekleri (external_ref, damage_type, source offset, received_at override) uygulandı.
-- **Sıradaki iş (BE):** Masking v1 (regex + basit isim listesi).
+- **Repo durumu:** api + şema + migration + ingest/claims + masking v1 çalışıyor. Compose'a worker/web/ollama servisleri eklendi ama worker kuyruk tüketmiyor, web iskeleti eksik.
+- **Son büyük olay:** Masking v1 (PR #8), sentence_splitter (PR #4), gt_generator şemaya uyarlandı (PR #7), compose servisleri (PR #6) merge edildi.
+- **Sıradaki iş (BE):** web/ Vite iskeleti (S1-13) + worker/main.py'yi gerçek kuyruk tüketicisine çevirmek (nursena ile).
 
 ---
 
 ## HAZIR OLANLAR
 
 - [x] Dizin yapısı (scaffold)
-- [x] `docker-compose.yml` — db + redis + **api çalışıyor**; worker/web/ollama hâlâ bekleniyor -> @nursenakyga
+- [x] `docker-compose.yml` — 6 servis tanımlı (db+redis healthy); **worker boş döngü**, **web entry point'siz** (temiz makinede web patlar)
 - [x] `.env.example` + `.env` (lokal)
-- [x] CI (ruff + gitleaks) + izin düzeltmesi (pull-requests read)
+- [x] CI (ruff + gitleaks)
 - [x] `CLAUDE.md`, `docs/STATUS.md`, `CODEOWNERS`
-- [x] **`schemas/claim.json`** — damage_type final (collision|single_vehicle|glass|hail|fire|theft|animal|other), source_references offset yapılı ({quote,start,end}), status sistem alanı, city/district, ISO tarih, nullable number
-- [x] **Alembic migration** — 6 tablo + `external_ref` kolonu: raw_messages, claims, audit_trail, mask_mappings, claim_embeddings (**VECTOR 384**), users
+- [x] **`schemas/claim.json`** — damage_type final (8 değer), source_references offset yapılı, status sistem alanı, city/district, ISO tarih, nullable number
+- [x] **Alembic migration** — 6 tablo + external_ref (VECTOR 384); tek head, çakışma yok
 - [x] **SQLAlchemy modelleri** + senkron DB session
-- [x] **`/health`**, **`/ingest`** (external_ref + received_at override destekli), **`/claims`** endpoint'leri
+- [x] **`/health`**, **`/ingest`** (external_ref + received_at override), **`/claims`** (status/urgency filtre + sayfalama), **`/claims/{id}`** (detay)
 - [x] Redis client + kuyruk (`claims:incoming`)
 - [x] Pydantic modelleri
+- [x] **Masking v1** (`worker/masking/`) — regex (TC/phone/plate/IBAN) + isim sözlüğü v0 (~42) + `mask_all` pipeline + testler — @bariss9
+- [x] `worker/parser/sentence_splitter` — Türkçe kısaltma/ondalık koruyan bölücü — @muyesser10
+- [x] `data/gt_generator.py` — claim.json uyumlu GT üreteci (İngilizce alanlar, TR PII, yaralanma→kritik) — @muyesser10
 
 ## HENÜZ YAPILMADI
 
-- [ ] **Masking v1** (regex + isim listesi) — @bariss9, sıradaki
-- [ ] source_references offset hesabı (pipeline `text.find(quote)` — worker gelince)
-- [ ] Worker iskeleti + pipeline @nursenakyga — received_at'i extraction'a geçirecek
-- [ ] LLM router @Cagri12345
-- [ ] Sentetik veri + replay  @muyesser10
-- [ ] `schemas/claim.json` nihai "dondu" işareti (external_ref eklendiği için hâlâ oturuyor)
+- [ ] **worker/main.py gerçek Redis tüketicisi** (S1-5) — @nursenakyga. Şu an time.sleep döngüsü; masking/sentence_splitter yazıldı ama çağrılmıyor. **Sprint 1 "uçtan uca" hedefinin en kritik boşluğu.**
+- [ ] **web/ Vite entry point** (S1-13) — @bariss9/@nursenakyga. index.html, vite.config.ts, src/main.tsx yok → compose web servisi patlar.
+- [ ] **Ham liste ekranı (S1-8)** — @bariss9, web iskeletine bağlı
+- [ ] **data/ text_generator** — @muyesser10. GT kayıtları var ama okunacak ihbar metni yok (damage_description None). Üretilmiş jsonl henüz yok.
+- [ ] **LLM router (S1-15)** — @Cagri12345. worker/llm_router yok, prompts/ boş. Tek satır kod yok.
+- [ ] **eval/ (S1-9)** — @MehmetTayyip. feature/ds-analiz-kurulum branch'inde var ama MERGE BLOKERİ (aşağıya bak).
+- [ ] isim sözlüğü 5K'ya genişletme + Türkçe karakter normalizasyonu (Sprint 2 — masking v2)
+- [ ] source_references offset hesabı (worker pipeline gelince)
+- [ ] `schemas/claim.json` nihai "dondu" işareti
 
 ---
 
 ## SPRINT İLERLEMESİ
 
 ### Sprint 1 — İskelet + İlk Uçtan Uca  —  DURUM: devam ediyor
-- [x] compose api servisi, api+db+redis healthy
+- [x] compose 6 servis tanımlı (worker/web içerik eksik)
 - [x] FastAPI iskelet + `/health`
-- [x] `schemas/claim.json` (LLM+DE geri bildirimiyle güncel)
+- [x] `schemas/claim.json`
 - [x] Alembic migration (VECTOR 384 + external_ref)
-- [x] `/ingest` + `/claims` endpoint'leri
-- [x] schemas/claim.json donduruldu (Gün 2)
-- [x] gt_generator gerçek şemayla (S1-1)
+
+
+- [x] `/ingest` + `/claims` + `/claims/{id}`
+- [x] **Masking v1 (S1-4)**
+- [x] GT üreteci (S1-1)
+- [ ] Worker kuyruk tüketici pipeline (S1-5) — **en kritik, uçtan uca bunu bekliyor**
+- [ ] LLM router (S1-15)
+- [ ] web/ Vite iskeleti + Pano (S1-13/S1-8)
+- [ ] text_generator (ihbar metinleri)
 - [x] Türkçe cümle bölücü (S1-3)
 - [x] e-posta üreteci (S1-2)
-- [ ] Masking regex + isim sözlüğü v0 (BE — sıradaki)
-- [ ] Worker pipeline v0 (Dev2)
-- [ ] LLM router entegre (LLM Engineer)
-- [ ] Vite + Pano iskelet
+
 - [ ] Sprint 1 demo
 
 
@@ -72,27 +81,33 @@
 
 | Bekleyen | Beklenen şey | Kimden | Durum |
 |----------|--------------|--------|-------|
-| Backend ikilisi | LLM router | @Cagri12345 | bekliyor |
-| Backend ikilisi | Sentetik test verisi + replay | @muyesser10 | bekliyor |
-| DS + LLM | Worker pipeline (received_at → extraction, offset hesabı) | @nursenakyga | bekliyor |
+| Uçtan uca demo | worker/main.py kuyruk tüketicisi (masking'i çağıracak) | @nursenakyga (S1-5) | masking hazır, pipeline bekliyor |
+| Frontend ekranları | web/ Vite iskeleti | @bariss9/@nursenakyga (S1-13) | package.json var, entry point yok |
+| eval çalışması | GT metinleri (text_generator) | @muyesser10 | GT kayıtları var, metin yok |
+| Backend ikilisi | LLM router | @Cagri12345 | hiç başlamadı |
+| **MERGE BLOKERİ** | **eval kodu ↔ claim.json alan adı uyuşmazlığı** | **@MehmetTayyip** | **DS branch Türkçe alan adı kullanıyor (police_no/plaka), claim.json İngilizce. Eval GT'yi okuyamaz. Standup'ta çözülmeli.** |
 
 ---
 
 ## BİLİNEN SORUNLAR / RİSKLER
 
-- `.env.example` `DATABASE_URL` `postgresql://` ile başlıyor; kod psycopg v3 için `+psycopg`'ye çeviriyor (database.py + env.py `.replace`). İleride `.env.example`'ı doğrudan düzeltmek ekiple konuşulacak.
-- Yerel Postgres çakışması (bariss9): db `docker-compose.override.yml` ile 5433'te (kişisel).
+- **DS branch (feature/ds-analiz-kurulum) merge blokeri:** (1) Türkçe alan adları (dil kararı İngilizceydi), (2) eval/ → analiz/ yeniden adlandırılmış (CLAUDE.md dizin sahipliğine aykırı), (3) pandas/scikit-learn requirements'ta yok (CI patlar). Merge öncesi standup.
+- **web servisi temiz makinede patlar:** entry point dosyaları eksik. S1-13 bunu çözecek.
+- worker `depends_on` `service_started` (api'deki `service_healthy` değil); pipeline yazılınca DB hazır olmadan bağlanma riski — @nursenakyga.
+- `.env.example` `postgresql://` ile başlıyor; kod `+psycopg`'ye çeviriyor. İleride düzeltme ekiple konuşulacak.
+- Yerel Postgres çakışması (bariss9): db override ile 5433'te (kişisel).
+- isim sözlüğü v0 Türkçe karaktersiz; "Hüseyin" eşleşmez — Sprint 2.
 - Groq rate limit — router Gemini fallback devrede olmalı.
 
 ---
 
 ## KARAR GEÇMİŞİ (kısa)
 
-- İsimler İngilizce (endpoint/kod/dosya); yorumlar İngilizce; prompt Türkçe; config ASCII.
-- claim.json: damage_type 8 değer + single_vehicle + glass; source_references offset'li {quote,start,end} (offset'i pipeline hesaplar, LLM sadece quote verir); status sistem alanı; city/district; estimated_amount nullable number; incident_date ISO.
-- external_ref: GT eşleştirme için ingest'e opsiyonel alan (raw_messages.external_ref). received_at override: GT'de sabit zaman verilebilir (eval tekrar edilebilirliği).
-- Sıfır maliyet: Groq+Gemini+Ollama; embedding yerel 384.
-- SQLAlchemy senkron (psycopg3); Python 3.11; migration hakkı backend ikilisinde.
+- İsimler İngilizce (endpoint/kod/dosya/**alan adları**); yorumlar İngilizce; prompt Türkçe; config ASCII.
+- claim.json: damage_type 8 değer; source_references offset'li {quote,start,end}; status sistem alanı; city/district; estimated_amount nullable number; incident_date ISO.
+- external_ref: GT eşleştirme için ingest'e opsiyonel alan. received_at override: GT'de sabit zaman.
+- Masking: regex önce, isim sözlüğü sonra; plaka 1-3 harf; v0 sözlük ~42 isim.
+- Sıfır maliyet: Groq+Gemini+Ollama; embedding yerel 384. SQLAlchemy senkron (psycopg3); Python 3.11.
 
 ---
 
