@@ -16,8 +16,9 @@ config = context.config
 load_dotenv()
 db_url = (
     os.environ["DATABASE_URL"]
-    .replace("@db:5432", "@localhost:5433")
     .replace("postgresql://", "postgresql+psycopg://")
+
+    # .replace("@db:5432", "@localhost:5433") deleted
 )
 config.set_main_option("sqlalchemy.url", db_url)
 
