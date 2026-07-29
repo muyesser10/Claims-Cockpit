@@ -36,12 +36,15 @@
 - [x] `data/gt_generator.py` — claim.json uyumlu GT üreteci (İngilizce alanlar, TR PII, yaralanma→kritik) — @muyesser10
 - [x] `data/text_generator.py` — e-posta üreteci (email kanalı), 5 sözlük, JSONL çıktı (emails.jsonl + enriched GT) — @muyesser10
 - [x] `replay/replay.py` — emails.jsonl → /ingest replay (dry-run + gerçek mod, gt_id/received_at eşleme) — @muyesser10
+- [x] `worker/extraction/schema.py` — extraction çıktı sözleşmesi (Pydantic): claim.json alanları + kanıt/güven/eksik alan blokları; claim.json senkron testi — @Cagri12345
+
 ## HENÜZ YAPILMADI
 
 - [ ] **worker/main.py gerçek Redis tüketicisi** (S1-5) — @nursenakyga. Şu an time.sleep döngüsü; masking/sentence_splitter yazıldı ama çağrılmıyor. **Sprint 1 "uçtan uca" hedefinin en kritik boşluğu.**
 - [ ] **web/ Vite entry point** (S1-13) — @bariss9/@nursenakyga. index.html, vite.config.ts, src/main.tsx yok → compose web servisi patlar.
 - [ ] **Ham liste ekranı (S1-8)** — @bariss9, web iskeletine bağlı
 - [ ] **LLM router (S1-15)** — @Cagri12345. worker/llm_router yok, prompts/ boş. Tek satır kod yok.
+- [ ] **LLM istemcisi + extraction prompt (S1-15)** — @Cagri12345. Extraction şeması hazır; sırada LLM istemcisi ve `prompts/extraction_v1.txt`. prompts/ hâlâ boş.
 - [ ] **eval/ (S1-9)** — @MehmetTayyip. feature/ds-analiz-kurulum branch'inde var ama MERGE BLOKERİ (aşağıya bak).
 - [ ] isim sözlüğü 5K'ya genişletme + Türkçe karakter normalizasyonu (Sprint 2 — masking v2)
 - [ ] source_references offset hesabı (worker pipeline gelince)
@@ -84,7 +87,7 @@
 | Uçtan uca demo | worker/main.py kuyruk tüketicisi (masking'i çağıracak) | @nursenakyga (S1-5) | masking hazır, pipeline bekliyor |
 | Frontend ekranları | web/ Vite iskeleti | @bariss9/@nursenakyga (S1-13) | package.json var, entry point yok |
 | eval çalışması | GT metinleri (text_generator) | @muyesser10 | GT kayıtları var, metin yok |
-| Backend ikilisi | LLM router | @Cagri12345 | hiç başlamadı |
+| Backend ikilisi | LLM istemcisi + extraction | @Cagri12345 | şema hazır, istemci sırada |
 | **MERGE BLOKERİ** | **eval kodu ↔ claim.json alan adı uyuşmazlığı** | **@MehmetTayyip** | **DS branch Türkçe alan adı kullanıyor (police_no/plaka), claim.json İngilizce. Eval GT'yi okuyamaz. Standup'ta çözülmeli.** |
 
 ---
