@@ -14,6 +14,7 @@
 - **Repo durumu:** api + şema + migration + ingest/claims + masking v1 çalışıyor. Compose'a worker/web/ollama servisleri eklendi ama worker kuyruk tüketmiyor, web iskeleti eksik.
 - **Son büyük olay:** Masking v1 (PR #8), sentence_splitter (PR #4), gt_generator şemaya uyarlandı (PR #7), compose servisleri (PR #6) merge edildi.
 - **Sıradaki iş (BE):** web/ Vite iskeleti (S1-13) + worker/main.py'yi gerçek kuyruk tüketicisine çevirmek (nursena ile).
+- **DE tarafı:** Sprint 1 DE işleri tamam (gt_generator, cümle bölücü, e-posta üreteci, replay). Sprint 2: transkript/form üreteçleri + counterparty fix (S2-DE-1).
 
 ---
 
@@ -33,13 +34,13 @@
 - [x] **Masking v1** (`worker/masking/`) — regex (TC/phone/plate/IBAN) + isim sözlüğü v0 (~42) + `mask_all` pipeline + testler — @bariss9
 - [x] `worker/parser/sentence_splitter` — Türkçe kısaltma/ondalık koruyan bölücü — @muyesser10
 - [x] `data/gt_generator.py` — claim.json uyumlu GT üreteci (İngilizce alanlar, TR PII, yaralanma→kritik) — @muyesser10
-
+- [x] `data/text_generator.py` — e-posta üreteci (email kanalı), 5 sözlük, JSONL çıktı (emails.jsonl + enriched GT) — @muyesser10
+- [x] `replay/replay.py` — emails.jsonl → /ingest replay (dry-run + gerçek mod, gt_id/received_at eşleme) — @muyesser10
 ## HENÜZ YAPILMADI
 
 - [ ] **worker/main.py gerçek Redis tüketicisi** (S1-5) — @nursenakyga. Şu an time.sleep döngüsü; masking/sentence_splitter yazıldı ama çağrılmıyor. **Sprint 1 "uçtan uca" hedefinin en kritik boşluğu.**
 - [ ] **web/ Vite entry point** (S1-13) — @bariss9/@nursenakyga. index.html, vite.config.ts, src/main.tsx yok → compose web servisi patlar.
 - [ ] **Ham liste ekranı (S1-8)** — @bariss9, web iskeletine bağlı
-- [ ] **data/ text_generator** — @muyesser10. GT kayıtları var ama okunacak ihbar metni yok (damage_description None). Üretilmiş jsonl henüz yok.
 - [ ] **LLM router (S1-15)** — @Cagri12345. worker/llm_router yok, prompts/ boş. Tek satır kod yok.
 - [ ] **eval/ (S1-9)** — @MehmetTayyip. feature/ds-analiz-kurulum branch'inde var ama MERGE BLOKERİ (aşağıya bak).
 - [ ] isim sözlüğü 5K'ya genişletme + Türkçe karakter normalizasyonu (Sprint 2 — masking v2)
@@ -55,17 +56,16 @@
 - [x] FastAPI iskelet + `/health`
 - [x] `schemas/claim.json`
 - [x] Alembic migration (VECTOR 384 + external_ref)
-
-
 - [x] `/ingest` + `/claims` + `/claims/{id}`
 - [x] **Masking v1 (S1-4)**
 - [x] GT üreteci (S1-1)
 - [ ] Worker kuyruk tüketici pipeline (S1-5) — **en kritik, uçtan uca bunu bekliyor**
 - [ ] LLM router (S1-15)
 - [ ] web/ Vite iskeleti + Pano (S1-13/S1-8)
-- [ ] text_generator (ihbar metinleri)
+- [x] text_generator / e-posta üreteci (S1-2)
 - [x] Türkçe cümle bölücü (S1-3)
 - [x] e-posta üreteci (S1-2)
+- [x] replay v1 (S1-10) — emails.jsonl → /ingest
 
 - [ ] Sprint 1 demo
 
