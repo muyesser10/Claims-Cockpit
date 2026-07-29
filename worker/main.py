@@ -20,7 +20,12 @@ QUEUE_KEY = "claims:incoming"
 def get_redis_client() -> redis.Redis:
     while True:
         try:
-            client = redis.from_url(REDIS_URL, decode_responses=True, socket_timeout=10, socket_keepalive=True)
+            client = redis.from_url(
+                REDIS_URL,
+                decode_responses=True,
+                socket_timeout=10,
+                socket_keepalive=True,
+            )
             client.ping()
             logger.info(f"Connected to Redis at: {REDIS_URL}")
             return client
