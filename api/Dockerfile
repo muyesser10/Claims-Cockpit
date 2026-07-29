@@ -1,14 +1,14 @@
-FROM python:3.11-slim   
+FROM python:3.11-slim
 
 WORKDIR /app
 
-# Dependencies
 COPY requirements.txt .
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
-# Code 
 COPY api /app/api
+COPY migrations /app/migrations
+COPY alembic.ini /app/alembic.ini
 
 EXPOSE 8000
 CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
