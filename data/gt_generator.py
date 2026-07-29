@@ -146,6 +146,8 @@ def build_one(index: int) -> dict:
     if injury:
         urgency = "critical"
 
+    damage_type = random.choice(DAMAGE_TYPES)
+
     expected = {
         "channel": channel,
         "content_type": content_type,
@@ -155,9 +157,11 @@ def build_one(index: int) -> dict:
         "incident_date": make_incident_date(received),
         "incident_location": make_location(),
         "damage_description": None,  # filled by text_generator later
-        "damage_type": random.choice(DAMAGE_TYPES),
+        "damage_type": damage_type,
         "injury": injury,
-        "counterparty_exists": random.random() < 0.6,
+        "counterparty_exists": (
+            random.random() < 0.6 if damage_type == "collision" else False
+        ),
         "estimated_amount": (random.randint(1000, 100000) if random.random() > 0.15 else None),
     }
 
