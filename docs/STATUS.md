@@ -9,11 +9,11 @@
 
 ## ÖZET (bir bakışta)
 
-- **Faz:** Sprint 1 devam ediyor. api + masking + veri üreteci hazır. 6 servis tanımlı ama worker boş döngü, web entry point'siz.
+- **Faz:** Sprint 1 devam ediyor. api + masking + veri üreteci + worker pipeline hazır. web hâlâ entry point'siz.
 - **Aktif sprint:** Sprint 1
-- **Repo durumu:** api + şema + migration + ingest/claims + masking v1 çalışıyor. Compose'a worker/web/ollama servisleri eklendi ama worker kuyruk tüketmiyor, web iskeleti eksik.
+- **Repo durumu:** api + şema + migration + ingest/claims + masking v1 + worker (mask→classify→route, audit_trail'e yazıyor) uçtan uca çalışıyor. web iskeleti eksik kalan tek boşluk.
 - **Son büyük olay:** Masking v1 (PR #8), sentence_splitter (PR #4), gt_generator şemaya uyarlandı (PR #7), compose servisleri (PR #6) merge edildi.
-- **Sıradaki iş (BE):** web/ Vite iskeleti (S1-13) + worker/main.py'yi gerçek kuyruk tüketicisine çevirmek (nursena ile).
+- **Sıradaki iş (BE):** web/ Vite iskeleti (S1-13) — worker artık kuyruk tüketiyor, uçtan uca demo bloke değil.
 
 ---
 
@@ -34,10 +34,10 @@
 - [x] `worker/parser/sentence_splitter` — Türkçe kısaltma/ondalık koruyan bölücü — @muyesser10
 - [x] `data/gt_generator.py` — claim.json uyumlu GT üreteci (İngilizce alanlar, TR PII, yaralanma→kritik) — @muyesser10
 - [x] `worker/extraction/schema.py` — extraction çıktı sözleşmesi (Pydantic): claim.json alanları + kanıt/güven/eksik alan blokları; claim.json senkron testi — @Cagri12345
+- [x] **worker/main.py gerçek Redis tüketicisi + pipeline (S1-5)** — `claims:incoming`'den BRPOP ile id çekiyor, `masking` → deterministik yaralanma kuralıyla `classification` → `Claim` oluşturup `routing` adımlarını çalıştırıyor, her adımda `audit_trail`'e gerçek satır yazıyor — @nursenakyga
 
 ## HENÜZ YAPILMADI
 
-- [ ] **worker/main.py gerçek Redis tüketicisi** (S1-5) — @nursenakyga. Şu an time.sleep döngüsü; masking/sentence_splitter yazıldı ama çağrılmıyor. **Sprint 1 "uçtan uca" hedefinin en kritik boşluğu.**
 - [ ] **web/ Vite entry point** (S1-13) — @bariss9/@nursenakyga. index.html, vite.config.ts, src/main.tsx yok → compose web servisi patlar.
 - [ ] **Ham liste ekranı (S1-8)** — @bariss9, web iskeletine bağlı
 - [ ] **data/ text_generator** — @muyesser10. GT kayıtları var ama okunacak ihbar metni yok (damage_description None). Üretilmiş jsonl henüz yok.
@@ -61,7 +61,7 @@
 - [x] `/ingest` + `/claims` + `/claims/{id}`
 - [x] **Masking v1 (S1-4)**
 - [x] GT üreteci (S1-1)
-- [ ] Worker kuyruk tüketici pipeline (S1-5) — **en kritik, uçtan uca bunu bekliyor**
+- [x] Worker kuyruk tüketici pipeline (S1-5)
 - [ ] LLM router (S1-15)
 - [ ] web/ Vite iskeleti + Pano (S1-13/S1-8)
 - [ ] text_generator (ihbar metinleri)
@@ -82,7 +82,7 @@
 
 | Bekleyen | Beklenen şey | Kimden | Durum |
 |----------|--------------|--------|-------|
-| Uçtan uca demo | worker/main.py kuyruk tüketicisi (masking'i çağıracak) | @nursenakyga (S1-5) | masking hazır, pipeline bekliyor |
+
 | Frontend ekranları | web/ Vite iskeleti | @bariss9/@nursenakyga (S1-13) | package.json var, entry point yok |
 | eval çalışması | GT metinleri (text_generator) | @muyesser10 | GT kayıtları var, metin yok |
 | Backend ikilisi | LLM istemcisi + extraction | @Cagri12345 | şema hazır, istemci sırada |
