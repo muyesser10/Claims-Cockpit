@@ -33,6 +33,8 @@
 - [x] **Masking v1** (`worker/masking/`) — regex (TC/phone/plate/IBAN) + isim sözlüğü v0 (~42) + `mask_all` pipeline + testler — @bariss9
 - [x] `worker/parser/sentence_splitter` — Türkçe kısaltma/ondalık koruyan bölücü — @muyesser10
 - [x] `data/gt_generator.py` — claim.json uyumlu GT üreteci (İngilizce alanlar, TR PII, yaralanma→kritik) — @muyesser10
+- [x] `data/text_generator.py` — e-posta üreteci (email kanalı), 5 sözlük, JSONL çıktı (emails.jsonl + enriched GT) — @muyesser10
+- [x] `replay/replay.py` — emails.jsonl → /ingest replay (dry-run + gerçek mod, gt_id/received_at eşleme) — @muyesser10
 - [x] `worker/extraction/schema.py` — extraction çıktı sözleşmesi (Pydantic): claim.json alanları + kanıt/güven/eksik alan blokları; claim.json senkron testi — @Cagri12345
 - [x] **worker/main.py gerçek Redis tüketicisi + pipeline (S1-5)** — `claims:incoming`'den BRPOP ile id çekiyor, `masking` → deterministik yaralanma kuralıyla `classification` → `Claim` oluşturup `routing` adımlarını çalıştırıyor, her adımda `audit_trail`'e gerçek satır yazıyor — @nursenakyga
 
@@ -40,7 +42,7 @@
 
 - [ ] **web/ Vite entry point** (S1-13) — @bariss9/@nursenakyga. index.html, vite.config.ts, src/main.tsx yok → compose web servisi patlar.
 - [ ] **Ham liste ekranı (S1-8)** — @bariss9, web iskeletine bağlı
-- [ ] **data/ text_generator** — @muyesser10. GT kayıtları var ama okunacak ihbar metni yok (damage_description None). Üretilmiş jsonl henüz yok.
+- [ ] **LLM router (S1-15)** — @Cagri12345. worker/llm_router yok, prompts/ boş. Tek satır kod yok.
 - [ ] **LLM istemcisi + extraction prompt (S1-15)** — @Cagri12345. Extraction şeması hazır; sırada LLM istemcisi ve `prompts/extraction_v1.txt`. prompts/ hâlâ boş.
 - [ ] **eval/ (S1-9)** — @MehmetTayyip. feature/ds-analiz-kurulum branch'inde var ama MERGE BLOKERİ (aşağıya bak).
 - [ ] isim sözlüğü 5K'ya genişletme + Türkçe karakter normalizasyonu (Sprint 2 — masking v2)
@@ -56,17 +58,16 @@
 - [x] FastAPI iskelet + `/health`
 - [x] `schemas/claim.json`
 - [x] Alembic migration (VECTOR 384 + external_ref)
-
-
 - [x] `/ingest` + `/claims` + `/claims/{id}`
 - [x] **Masking v1 (S1-4)**
 - [x] GT üreteci (S1-1)
 - [x] Worker kuyruk tüketici pipeline (S1-5)
 - [ ] LLM router (S1-15)
 - [ ] web/ Vite iskeleti + Pano (S1-13/S1-8)
-- [ ] text_generator (ihbar metinleri)
+- [x] text_generator / e-posta üreteci (S1-2)
 - [x] Türkçe cümle bölücü (S1-3)
 - [x] e-posta üreteci (S1-2)
+- [x] replay v1 (S1-10) — emails.jsonl → /ingest
 
 - [ ] Sprint 1 demo
 
