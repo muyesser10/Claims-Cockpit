@@ -77,9 +77,15 @@ def step_route(db: Session, msg: RawMessage, masked_text: str, urgency: str) -> 
         status="in_human_review",
     )
     db.add(claim)
-    db.flush()  
+    db.flush()
 
-    log_audit(db, "routing", raw_message_id=msg.id, claim_id=claim.id, detail={"status": claim.status})
+    log_audit(
+        db,
+        "routing",
+        raw_message_id=msg.id,
+        claim_id=claim.id,
+        detail={"status": claim.status},
+    )
     return claim
 
 
@@ -100,6 +106,12 @@ def process_message(db: Session, raw_message_id: int) -> None:
         failed_msg = db.get(RawMessage, raw_message_id)
         if failed_msg is not None:
             failed_msg.status = "dead_letter"
-            db.add(AuditTrail(raw_message_id=raw_message_id, step="pipeline_error", detail={"error": str(e)}))
+            db.add(
+                AuditTrail(
+                    raw_message_id=raw_message_id,
+                    step="pipeline_error",
+                    detail={"error": str(e)},
+                )
+            )
             db.commit()
         logger.error(f"raw_message_id={raw_message_id} pipeline failed: {e}", exc_info=True)
