@@ -37,13 +37,13 @@
 - [x] `replay/replay.py` — emails.jsonl → /ingest replay (dry-run + gerçek mod, gt_id/received_at eşleme) — @muyesser10
 - [x] `worker/extraction/schema.py` — extraction çıktı sözleşmesi (Pydantic): claim.json alanları + kanıt/güven/eksik alan blokları; claim.json senkron testi — @Cagri12345
 - [x] **worker/main.py gerçek Redis tüketicisi + pipeline (S1-5)** — `claims:incoming`'den BRPOP ile id çekiyor, `masking` → deterministik yaralanma kuralıyla `classification` → `Claim` oluşturup `routing` adımlarını çalıştırıyor, her adımda `audit_trail`'e gerçek satır yazıyor — @nursenakyga
+- [x] `worker/llm/client.py` — OpenAI istemcisi (instructor + Pydantic): iki kademe, seed, zaman aşımı, iki katmanlı retry, denetim izi logu — @Cagri12345
 
 ## HENÜZ YAPILMADI
 
 - [ ] **web/ Vite entry point** (S1-13) — @bariss9/@nursenakyga. index.html, vite.config.ts, src/main.tsx yok → compose web servisi patlar.
 - [ ] **Ham liste ekranı (S1-8)** — @bariss9, web iskeletine bağlı
-- [ ] **LLM router (S1-15)** — @Cagri12345. worker/llm_router yok, prompts/ boş. Tek satır kod yok.
-- [ ] **LLM istemcisi + extraction prompt (S1-15)** — @Cagri12345. Extraction şeması hazır; sırada LLM istemcisi ve `prompts/extraction_v1.txt`. prompts/ hâlâ boş.
+- [ ] **extraction prompt (S1-15)** — @Cagri12345. Şema ve LLM istemcisi hazır; sırada `prompts/extraction_v1.txt`. prompts/ hâlâ boş.
 - [ ] **eval/ (S1-9)** — @MehmetTayyip. feature/ds-analiz-kurulum branch'inde var ama MERGE BLOKERİ (aşağıya bak).
 - [ ] isim sözlüğü 5K'ya genişletme + Türkçe karakter normalizasyonu (Sprint 2 — masking v2)
 - [ ] source_references offset hesabı (worker pipeline gelince)
@@ -99,7 +99,7 @@
 - `.env.example` `postgresql://` ile başlıyor; kod `+psycopg`'ye çeviriyor. İleride düzeltme ekiple konuşulacak.
 - Yerel Postgres çakışması (bariss9): db override ile 5433'te (kişisel).
 - isim sözlüğü v0 Türkçe karaktersiz; "Hüseyin" eşleşmez — Sprint 2.
-- Groq rate limit — router Gemini fallback devrede olmalı.
+- OpenAI maliyeti/kotası — eval koşusu toplu çağrı yapar. `DEMO_OFFLINE` için artık yerel model yok, kayıtlı fixture gerekiyor (Sprint 4). Çalışan fallback katmanı henüz yazılmadı, sadece anahtarlar duruyor. Bkz. ADR-001.
 
 ---
 
@@ -109,7 +109,7 @@
 - claim.json: damage_type 8 değer; source_references offset'li {quote,start,end}; status sistem alanı; city/district; estimated_amount nullable number; incident_date ISO.
 - external_ref: GT eşleştirme için ingest'e opsiyonel alan. received_at override: GT'de sabit zaman.
 - Masking: regex önce, isim sözlüğü sonra; plaka 1-3 harf; v0 sözlük ~42 isim.
-- Sıfır maliyet: Groq+Gemini+Ollama; embedding yerel 384. SQLAlchemy senkron (psycopg3); Python 3.11.
+- LLM sağlayıcı: OpenAI iki kademe (gpt-4o-mini / gpt-4o) — ADR-001. Eski sağlayıcı anahtarları `.env.example`'da fallback başlığı altında duruyor, kod okumuyor. **Embedding yerel 384 (değişmedi).** SQLAlchemy senkron (psycopg3); Python 3.11.
 
 ---
 
