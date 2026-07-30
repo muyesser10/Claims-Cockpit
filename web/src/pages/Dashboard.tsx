@@ -1,12 +1,13 @@
+
 import { useClaims } from "../api/useClaims";
 import ClaimsTable from "../components/ClaimsTable";
 
-export default function Pano() {
+export default function Dashboard() {
   const { data, isLoading, isError, error } = useClaims();
 
   return (
     <div>
-      <h1 className="text-xl font-semibold mb-4">Pano</h1>
+      <h1 className="text-xl font-semibold mb-4">Dashboard</h1>
 
       {isLoading && <p className="text-slate-500">Yükleniyor...</p>}
 

@@ -1,14 +1,14 @@
 import { Routes, Route, NavLink } from "react-router-dom";
-import Pano from "./pages/Pano";
-import Kuyruk from "./pages/Kuyruk";
-import Soru from "./pages/Soru";
-import Metrikler from "./pages/Metrikler";
+import Dashboard from './pages/Dashboard';
+import Queue from './pages/Queue';
+import Question from './pages/Question';
+import Metrics from './pages/Metrics';
 
 const navItems = [
-  { to: "/", label: "Pano" },
-  { to: "/kuyruk", label: "Kuyruk" },
-  { to: "/soru", label: "Soru" },
-  { to: "/metrikler", label: "Metrikler" },
+  { to: "/", label: "Dashboard" },
+  { to: "/kuyruk", label: "Queue" },
+  { to: "/soru", label: "Question" },
+  { to: "/metrikler", label: "Metrics" },
 ];
 
 export default function App() {
@@ -30,10 +30,10 @@ export default function App() {
       </nav>
       <main className="p-6">
         <Routes>
-          <Route path="/" element={<Pano />} />
-          <Route path="/kuyruk" element={<Kuyruk />} />
-          <Route path="/soru" element={<Soru />} />
-          <Route path="/metrikler" element={<Metrikler />} />
+          <Route path="/" element={<Dashboard />} />
+          <Route path="/kuyruk" element={<Queue />} />
+          <Route path="/soru" element={<Question/>} />
+          <Route path="/metrikler" element={<Metrics />} />
         </Routes>
       </main>
     </div>
