@@ -35,6 +35,12 @@ def step_mask(db: Session, msg: RawMessage) -> str:
         masked_text, mappings = mask_all(msg.raw_text)
     except Exception as e:
         logger.warning(f"mask_all failed, continuing with raw text: {e}")
+        log_audit(
+            db,
+            "masking_error",
+            raw_message_id=msg.id,
+            detail={"error": str(e), "warning": "unmasked raw text used as fallback"},
+        )
         masked_text, mappings = msg.raw_text, []
 
     for m in mappings:
