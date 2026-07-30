@@ -9,9 +9,9 @@
 
 ## ÖZET (bir bakışta)
 
-- **Faz:** Sprint 1 devam ediyor. api + masking + veri üreteci + worker pipeline hazır. web hâlâ entry point'siz.
+- **Faz:** Sprint 1 devam ediyor. api + masking + veri üreteci + worker pipeline hazır.
 - **Aktif sprint:** Sprint 1
-- **Repo durumu:** api + şema + migration + ingest/claims + masking v1 + worker (mask→classify→route, audit_trail'e yazıyor) uçtan uca çalışıyor. web iskeleti eksik kalan tek boşluk.
+- **Repo durumu:** api + şema + migration + ingest/claims + masking v1 + worker + web scaffold (4 sayfa routing) hepsi çalışıyor.
 - **Son büyük olay:** Masking v1 (PR #8), sentence_splitter (PR #4), gt_generator şemaya uyarlandı (PR #7), compose servisleri (PR #6) merge edildi.
 - **Sıradaki iş (BE):** web/ Vite iskeleti (S1-13) — worker artık kuyruk tüketiyor, uçtan uca demo bloke değil.
 
@@ -38,10 +38,10 @@
 - [x] `worker/extraction/schema.py` — extraction çıktı sözleşmesi (Pydantic): claim.json alanları + kanıt/güven/eksik alan blokları; claim.json senkron testi — @Cagri12345
 - [x] **worker/main.py gerçek Redis tüketicisi + pipeline (S1-5)** — `claims:incoming`'den BRPOP ile id çekiyor, `masking` → deterministik yaralanma kuralıyla `classification` → `Claim` oluşturup `routing` adımlarını çalıştırıyor, her adımda `audit_trail`'e gerçek satır yazıyor — @nursenakyga
 - [x] `worker/llm/client.py` — OpenAI istemcisi (instructor + Pydantic): iki kademe, seed, zaman aşımı, iki katmanlı retry, denetim izi logu — @Cagri12345
+- [x] **web/ Vite entry point** (S1-13) — @bariss9/@nursenakyga. index.html, vite.config.ts, src/main.tsx 
 
 ## HENÜZ YAPILMADI
 
-- [ ] **web/ Vite entry point** (S1-13) — @bariss9/@nursenakyga. index.html, vite.config.ts, src/main.tsx yok → compose web servisi patlar.
 - [ ] **Ham liste ekranı (S1-8)** — @bariss9, web iskeletine bağlı
 - [ ] **extraction prompt (S1-15)** — @Cagri12345. Şema ve LLM istemcisi hazır; sırada `prompts/extraction_v1.txt`. prompts/ hâlâ boş.
 - [ ] **eval/ (S1-9)** — @MehmetTayyip. feature/ds-analiz-kurulum branch'inde var ama MERGE BLOKERİ (aşağıya bak).
@@ -84,7 +84,6 @@
 | Bekleyen | Beklenen şey | Kimden | Durum |
 |----------|--------------|--------|-------|
 
-| Frontend ekranları | web/ Vite iskeleti | @bariss9/@nursenakyga (S1-13) | package.json var, entry point yok |
 | eval çalışması | GT metinleri (text_generator) | @muyesser10 | GT kayıtları var, metin yok |
 | Backend ikilisi | LLM istemcisi + extraction | @Cagri12345 | şema hazır, istemci sırada |
 | **MERGE BLOKERİ** | **eval kodu ↔ claim.json alan adı uyuşmazlığı** | **@MehmetTayyip** | **DS branch Türkçe alan adı kullanıyor (police_no/plaka), claim.json İngilizce. Eval GT'yi okuyamaz. Standup'ta çözülmeli.** |
