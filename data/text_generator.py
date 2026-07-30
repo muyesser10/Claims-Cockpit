@@ -26,6 +26,9 @@ DICT_DIR = Path("data/dictionaries")
 def load_dictionaries() -> dict:
     """Load all five dictionary files once into memory."""
     damage_phrases = json.loads((DICT_DIR / "damage_phrases.json").read_text(encoding="utf-8"))
+    form_damage_phrases = json.loads(
+        (DICT_DIR / "form_damage_phrases.json").read_text(encoding="utf-8")
+    )
     fillers = _read_lines(DICT_DIR / "filler_words.txt")
     openings = _read_lines(DICT_DIR / "opening_templates.txt")
     closings = _read_lines(DICT_DIR / "closing_templates.txt")
@@ -38,6 +41,7 @@ def load_dictionaries() -> dict:
 
     return {
         "damage_phrases": damage_phrases,
+        "form_damage_phrases": form_damage_phrases,
         "fillers": fillers,
         "openings": openings,
         "closings": closings,
@@ -172,6 +176,230 @@ def build_email(gt: dict, dicts: dict) -> tuple[str, str]:
     return email_text, damage_phrase
 
 
+def build_transcript(gt: dict, dicts: dict) -> tuple[str, str]:
+    """Build a call-center transcript from a ground truth record.
+
+    Agent/Müşteri dialogue with fillers and scattered info. Same fidelity
+    rules as email: null fields never appear, PII goes in text not expected,
+    damage phrase matches damage_type. Returns (text, damage_phrase).
+    """
+    expected = gt["expected"]
+    personal = gt["_personal"]
+    fillers = dicts["fillers"]
+
+    # Damage phrase matching the type (same as email).
+    damage_type = expected["damage_type"]
+    if damage_type and damage_type in dicts["damage_phrases"]:
+        damage_phrase = random.choice(dicts["damage_phrases"][damage_type])
+    else:
+        damage_phrase = "aracımda hasar oluştu"
+
+    date_phrase = make_date_phrase(
+        expected["incident_date"], gt["received_at"], dicts["relative_dates"]
+    )
+    city = expected["incident_location"]["city"]
+    suffix = CITY_SUFFIX.get(city, "'de")
+
+    def filler() -> str:
+        """Return a filler word 40% of the time, else empty."""
+        return random.choice(fillers) + " " if random.random() < 0.4 else ""
+
+    turns = []
+    turns.append(
+        "Ajan: "
+        + random.choice(
+            [
+                "Merhaba, size nasıl yardımcı olabilirim?",
+                "İyi günler, buyurun sizi dinliyorum.",
+                "Merhaba, sigorta hasar kaydı için mi aradınız?",
+                "İyi günler, hasar kaydı oluşturmak için mi aradınız?",
+            ]
+        )
+    )
+    turns.append(f"Müşteri: {filler()}{date_phrase} {city}{suffix} {damage_phrase}.")
+    turns.append(
+        "Ajan: "
+        + random.choice(
+            [
+                "Poliçe numaranızı alabilir miyim?",
+                "Poliçe numaranız neydi?",
+                "Poliçenizin numarasını öğrenebilir miyim?",
+                "Poliçe no'yu paylaşır mısınız?",
+            ]
+        )
+    )
+    turns.append(f"Müşteri: {expected['policy_no']}.")
+    turns.append(
+        "Ajan: "
+        + random.choice(
+            [
+                "Aracınızın plakası neydi?",
+                "Plakanızı alabilir miyim?",
+                "Araç plakanızı söyler misiniz?",
+                "Plaka numaranızı öğrenebilir miyim?",
+            ]
+        )
+    )
+    turns.append(f"Müşteri: {expected['plate']}.")
+
+    # Injury: sometimes volunteered, sometimes asked.
+    if expected["injury"]:
+        turns.append("Ajan: Yaralanan var mı?")
+        turns.append(
+            "Müşteri: "
+            + random.choice(
+                [
+                    "evet, bir kişi hafif yaralandı.",
+                    "maalesef birkaç yaralımız var.",
+                    "evet, ambulans çağırdık.",
+                    "evet, ufak yaralanmalar oldu.",
+                    "evet, bir yaralı hastaneye götürüldü.",
+                    "evet, birkaç kişi tedavi gördü.",
+                    "evet,  yaralanan oldu.",
+                    "evet",
+                ]
+            )
+        )
+    else:
+        turns.append("Ajan: Aracınızda yaralanan var mı?")
+        turns.append(
+            "Müşteri: "
+            + random.choice(
+                [
+                    "hayır, kimse zarar görmedi.",
+                    "yok, sadece araçta hasar var.",
+                    "çok şükür yaralanan olmadı.",
+                    "hayır, herkes iyi durumda.",
+                    "yok, ufak tefek çizikler dışında kimseye bir şey olmadı.",
+                    "yok, sadece maddi hasar var.",
+                    "hayır, kazada kimse yaralanmadı.",
+                    "hayır",
+                    "yok",
+                ]
+            )
+        )
+
+    # Counterparty
+    turns.append(
+        "Ajan: "
+        + random.choice(
+            [
+                "Karşı tarafta başka araç var mıydı?",
+                "Olayda başka bir araç var mıydı?",
+                "Kazaya karışan başka araç oldu mu?",
+            ]
+        )
+    )
+    if expected["counterparty_exists"]:
+        turns.append(
+            "Müşteri: "
+            + random.choice(
+                [
+                    "evet, karşı tarafta bir araç vardı.",
+                    "evet, başka bir araç da olaya karıştı.",
+                    "evet, iki araç da olaya karıştı.",
+                ]
+            )
+        )
+    else:
+        turns.append(
+            "Müşteri: "
+            + random.choice(
+                [
+                    "hayır, tek taraflı bir olaydı.",
+                    "yok, başka araç yoktu.",
+                    "hayır, karşı taraf yoktu.",
+                ]
+            )
+        )
+
+    # Amount only if not null (never invent).
+    if expected["estimated_amount"] is not None:
+        turns.append(
+            "Ajan: "
+            + random.choice(
+                [
+                    "Tahmini hasar tutarı hakkında fikriniz var mı?",
+                    "Hasar ne kadar tutar tahmini olarak?",
+                    "Yaklaşık hasar bedeli ne kadar?",
+                ]
+            )
+        )
+        turns.append(
+            "Müşteri: "
+            + random.choice(
+                [
+                    f"yaklaşık {expected['estimated_amount']} TL civarı.",
+                    f"tahminen {expected['estimated_amount']} TL kadar.",
+                    f"{expected['estimated_amount']} TL civarında sanırım.",
+                ]
+            )
+        )
+
+    # Closing with personal info (masking material).
+    turns.append("Ajan: Son olarak ad soyad ve telefon alabilir miyim?")
+    turns.append(f"Müşteri: {personal['name']}, {personal['phone']}.")
+
+    return "\n".join(turns), damage_phrase
+
+
+def build_form(gt: dict, dicts: dict) -> tuple[str, str]:
+    """Build a web-form record as labeled plain text.
+
+    Most structured but trickiest channel. Damage description is short and
+    telegraphic. Some fields are occasionally blank (~10%). Same fidelity
+    rules: null fields absent, PII in text not expected. Returns (text, phrase).
+    """
+    expected = gt["expected"]
+    personal = gt["_personal"]
+
+    # Short, telegraphic damage phrase from the form-specific dictionary.
+    damage_type = expected["damage_type"]
+    if damage_type and damage_type in dicts["form_damage_phrases"]:
+        damage_phrase = random.choice(dicts["form_damage_phrases"][damage_type])
+    else:
+        damage_phrase = "araç hasarlı"
+
+    lines = []
+    lines.append(f"Poliçe No: {expected['policy_no']}")
+    lines.append(f"Plaka: {expected['plate']}")
+
+    # Date: 10% blank (form fields often left empty).
+    if random.random() < 0.1:
+        lines.append("Olay Tarihi: ")
+    else:
+        lines.append(f"Olay Tarihi: {expected['incident_date']}")
+
+    # Location.
+    city = expected["incident_location"]["city"]
+    district = expected["incident_location"].get("district")
+    lines.append(f"İl: {city}")
+    if district:
+        lines.append(f"İlçe: {district}")
+
+    lines.append(f"Hasar: {damage_phrase}")
+
+    # Injury: 10% blank, otherwise evet/hayır.
+    if random.random() < 0.1:
+        lines.append("Yaralanma: ")
+    else:
+        lines.append(f"Yaralanma: {'evet' if expected['injury'] else 'hayır'}")
+
+    # Counterparty only if true (single-sided events omit it).
+    if expected["counterparty_exists"]:
+        lines.append("Karşı Taraf: evet")
+
+    # Amount only if not null.
+    if expected["estimated_amount"] is not None:
+        lines.append(f"Tahmini Hasar: {expected['estimated_amount']} TL")
+
+    # Personal info (masking material).
+    lines.append(f"Ad Soyad: {personal['name']}")
+    lines.append(f"Telefon: {personal['phone']}")
+
+    return "\n".join(lines), damage_phrase
+
+
 app = typer.Typer()
 
 
@@ -182,19 +410,19 @@ def generate(
     ground_truth: Annotated[Path, typer.Option(help="Input ground truth JSONL")] = Path(
         "data/ground_truth.jsonl"
     ),
-    emails_output: Annotated[Path, typer.Option(help="Output JSONL for emails")] = Path(
-        "data/emails.jsonl"
+    texts_output: Annotated[Path, typer.Option(help="Output JSONL for texts")] = Path(
+        "data/texts.jsonl"
     ),
     enriched: Annotated[Path, typer.Option(help="Enriched ground truth output")] = Path(
         "data/ground_truth_enriched.jsonl"
     ),
 ):
-    """Generate emails from email-channel ground truth records."""
+    """Generate texts (email + transcript) from ground truth records."""
     random.seed(seed)
     dicts = load_dictionaries()
 
     enriched_records = []
-    emails = []
+    texts = []
     written = 0
 
     for line in ground_truth.read_text(encoding="utf-8").splitlines():
@@ -202,8 +430,10 @@ def generate(
             continue
         gt = json.loads(line)
 
-        # This sprint: email channel only.
-        if gt["expected"]["channel"] != "email":
+        channel = gt["expected"]["channel"]
+
+        # All three channels supported.
+        if channel not in ("email", "call_transcript", "web_form"):
             enriched_records.append(gt)  # keep untouched
             continue
 
@@ -211,28 +441,33 @@ def generate(
             enriched_records.append(gt)
             continue
 
-        email_text, damage_phrase = build_email(gt, dicts)
+        if channel == "email":
+            text, damage_phrase = build_email(gt, dicts)
+        elif channel == "call_transcript":
+            text, damage_phrase = build_transcript(gt, dicts)
+        else:  # web_form
+            text, damage_phrase = build_form(gt, dicts)
 
-        # Collect the email as one JSONL record.
-        emails.append({"gt_id": gt["gt_id"], "channel": "email", "text": email_text})
+        # Collect the text as one JSONL record.
+        texts.append({"gt_id": gt["gt_id"], "channel": channel, "text": text})
 
         # Fill in damage_description in the enriched ground truth.
         gt["expected"]["damage_description"] = damage_phrase
         enriched_records.append(gt)
         written += 1
 
-    # Write all emails to a single JSONL file.
-    emails_output.parent.mkdir(parents=True, exist_ok=True)
-    with emails_output.open("w", encoding="utf-8") as f:
-        for email in emails:
-            f.write(json.dumps(email, ensure_ascii=False) + "\n")
+    # Write all texts (email + transcript) to a single JSONL file.
+    texts_output.parent.mkdir(parents=True, exist_ok=True)
+    with texts_output.open("w", encoding="utf-8") as f:
+        for text_record in texts:
+            f.write(json.dumps(text_record, ensure_ascii=False) + "\n")
 
     # Write the enriched ground truth.
     with enriched.open("w", encoding="utf-8") as f:
         for record in enriched_records:
             f.write(json.dumps(record, ensure_ascii=False) + "\n")
 
-    typer.echo(f"Wrote {written} emails to {emails_output}")
+    typer.echo(f"Wrote {written} texts to {texts_output}")
     typer.echo(f"Enriched ground truth: {enriched}")
 
 

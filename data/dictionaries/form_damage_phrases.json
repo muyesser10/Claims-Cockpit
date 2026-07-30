@@ -1,0 +1,72 @@
+{
+  "collision": [
+    "arkadan vurdular, tampon göçük",
+    "yandan çarptılar, sağ kapı ezildi",
+    "kırmızıda beklerken arkadan çarptılar",
+    "kavşakta çarpıştık, sol far kırıldı",
+    "şerit değiştirirken çamurluğa çarptı",
+    "park halindeyken sol kapıya vurmuşlar",
+    "önden çarpıştık, kaput ezildi",
+    "arka tampon darbe aldı, boya döküldü",
+    "yanlış solladı, kapıya çarptı",
+    "trafik ışığında arkadan çarptılar, bagaj kapağı yamuldu"
+  ],
+  "single_vehicle": [
+    "kaldırıma vurdum, jant eğildi",
+    "bariyere sürttüm, sol taraf çizildi",
+    "direğe çarptım, kaput göçtü",
+    "buzda kaydım, duvara sürttüm",
+    "refüje çıktım, alt takım hasar gördü",
+    "geri manevrada tamponu duvara çarptım",
+    "yağmurda kaydım, bariyere çarptım",
+    "virajı alamadım, aracı duvara vurdum"
+  ],
+  "glass": [
+    "taş geldi, ön cam çatladı",
+    "yan cam kırıldı",
+    "arka cam tamamen parçalandı",
+    "ön cam çatlağı büyüdü",
+    "otoyolda taş sıçradı, cam kırıldı",
+    "ön cam patladı, her yere dağıldı",
+    "yan camı kırmışlar"
+  ],
+  "hail": [
+    "dolu yağdı, kaput göçtü",
+    "dolu vurdu, tavan ve bagaj göçtü",
+    "dolu sonrası boya zarar gördü",
+    "şiddetli dolu, araç göçük içinde",
+    "dolu yağdı, kaporta delik deşik oldu"
+  ],
+  "fire": [
+    "motor yandı",
+    "elektrik kontağından yangın çıktı",
+    "kaput altından duman ve alev çıktı",
+    "park halindeyken motor alev aldı",
+    "araç birden tutuştu"
+  ],
+  "theft": [
+    "park halindeyken araç çalındı",
+    "cam kırıp içindeki eşyaları almışlar",
+    "teyp ve navigasyon çalındı",
+    "aküyle yedek lastiği çalmışlar",
+    "otoparktan arabayı çaldılar",
+    "aracın aynalarını söküp götürmüşler",
+    "bagajdan eşyaları çalmışlar"
+  ],
+  "animal": [
+    "yolda hayvana çarptım, tampon hasar",
+    "köpek atladı, tampon zarar gördü",
+    "gece hayvana çarptım, far kırıldı",
+    "sürüden hayvan çıktı, çarptım",
+    "inek yola çıktı, çarptım"
+  ],
+  "other": [
+    "sel bastı, motor çalışmıyor",
+    "ağaç dalı düştü, tavan göçtü",
+    "başka araç sürtmüş, kaçmış",
+    "fırtınada cisim çarptı, kaput hasarlı",
+    "rögar açıktı, alt takım hasar gördü",
+    "şiddetli rüzgar tabelayı düşürdü, kaput ezildi",
+    "yağmurda su bastı, elektrik arızalandı"
+  ]
+}
