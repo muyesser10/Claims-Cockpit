@@ -1,8 +1,13 @@
-"""Tests for the email text generator."""
+"""Tests  text generator."""
 
 import random
 
-from data.text_generator import build_email, load_dictionaries
+from data.text_generator import (
+    build_email,
+    build_form,
+    build_transcript,
+    load_dictionaries,
+)
 
 
 def _sample_gt(overrides: dict | None = None) -> dict:
@@ -75,3 +80,45 @@ def test_injury_line_only_when_true():
     gt_no = _sample_gt({"injury": False})
     email_no, _ = build_email(gt_no, dicts)
     assert "yaralanan" not in email_no
+
+
+def test_transcript_has_dialogue_and_pii():
+    """Transcript is Agent/Müşteri dialogue and carries PII in text."""
+    random.seed(42)
+    dicts = load_dictionaries()
+    gt = _sample_gt()
+    text, _ = build_transcript(gt, dicts)
+    assert "Ajan:" in text
+    assert "Müşteri:" in text
+    assert gt["_personal"]["name"] in text
+
+
+def test_transcript_null_amount_not_in_text():
+    """Transcript omits amount when estimated_amount is null."""
+    random.seed(42)
+    dicts = load_dictionaries()
+    gt = _sample_gt({"estimated_amount": None})
+    text, _ = build_transcript(gt, dicts)
+    assert "TL" not in text
+
+
+def test_form_is_labeled_and_telegraphic():
+    """Form is labeled plain text with a short damage phrase."""
+    random.seed(42)
+    dicts = load_dictionaries()
+    gt = _sample_gt()
+    text, damage_phrase = build_form(gt, dicts)
+    assert "Poliçe No:" in text
+    assert "Plaka:" in text
+    assert gt["_personal"]["name"] in text
+    # Form damage phrase comes from the telegraphic dictionary.
+    assert damage_phrase in dicts["form_damage_phrases"]["glass"]
+
+
+def test_form_null_amount_not_in_text():
+    """Form omits amount when estimated_amount is null."""
+    random.seed(42)
+    dicts = load_dictionaries()
+    gt = _sample_gt({"estimated_amount": None})
+    text, _ = build_form(gt, dicts)
+    assert "Tahmini Hasar:" not in text

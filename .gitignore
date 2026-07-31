@@ -24,7 +24,7 @@ npm-debug.log*
 
 # Data (large files never go in the repo)
 data/*.jsonl
-!data/emails.jsonl
+!data/texts.jsonl 
 !data/ground_truth_enriched.jsonl
 data/generated/
 *.dump
