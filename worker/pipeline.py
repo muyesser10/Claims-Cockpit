@@ -5,10 +5,13 @@ from sqlalchemy.orm import Session
 
 from api.models.db import AuditTrail, Claim, MaskMapping, RawMessage
 from worker.masking.pipeline import mask_all
+from worker.shared.injury_terms import INJURY_TERMS, _normalize_tr
 
 logger = logging.getLogger("worker.pipeline")
 
-INJURY_KEYWORDS = ("yaralı", "kan", "hastane", "ambulans")
+# Normalized once at import time — see worker/shared/injury_terms.py for why
+# a plain .lower() would miss uppercase Turkish injury terms.
+_NORMALIZED_INJURY_TERMS = tuple(_normalize_tr(term) for term in INJURY_TERMS)
 
 
 def log_audit(
@@ -59,8 +62,8 @@ def step_mask(db: Session, msg: RawMessage) -> str:
 
 
 def step_classify(db: Session, msg: RawMessage, masked_text: str) -> str:
-    lowered = masked_text.lower()
-    if any(kw in lowered for kw in INJURY_KEYWORDS):
+    normalized_text = _normalize_tr(masked_text)
+    if any(term in normalized_text for term in _NORMALIZED_INJURY_TERMS):
         urgency = "critical"
         logger.warning(f"raw_message_id={msg.id} | Deterministic rule triggered: CRITICAL INJURY")
     else:
