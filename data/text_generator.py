@@ -109,6 +109,34 @@ def make_date_phrase(incident_date: str, received_at: str, relative_dates: list)
     return f"{day} {TURKISH_MONTHS[month - 1]}"
 
 
+def resolve_location(expected: dict) -> str:
+    """Return the location phrase and align GT district with the text.
+
+    If the district is present, 60% of the time it is written into the text
+    (GT keeps it); 40% of the time it is omitted from the text AND set to
+    null in GT — so text and ground truth stay consistent, and some records
+    exercise the "leave null when not in text" rule.
+    """
+    city = expected["incident_location"]["city"]
+    suffix = CITY_SUFFIX.get(city, "'de")
+    district = expected["incident_location"].get("district")
+
+    if district and random.random() < 0.6:
+        # Keep district: write it into the text, GT stays as is.
+        return f"{city} {district}{_district_suffix(district)}"
+    else:
+        # Omit district: not in text, so null it in GT for consistency.
+        expected["incident_location"]["district"] = None
+        return f"{city}{suffix}"
+
+
+def _district_suffix(district: str) -> str:
+    """Locative suffix for a district (rough Turkish vowel harmony)."""
+    back_vowels = "aıou"
+    last_vowel = next((ch for ch in reversed(district.lower()) if ch in "aeıioöuü"), "e")
+    return "'da" if last_vowel in back_vowels else "'de"
+
+
 def build_body(gt: dict, damage_phrase: str, date_phrase: str) -> str:
     """Build the email body from ground truth, respecting null fields.
 
@@ -119,10 +147,9 @@ def build_body(gt: dict, damage_phrase: str, date_phrase: str) -> str:
     parts = []
 
     # Opening line: date + plate + location + damage.
-    city = expected["incident_location"]["city"]
-    suffix = CITY_SUFFIX.get(city, "'de")
+    location = resolve_location(expected)
     plate = expected["plate"]
-    parts.append(f"{date_phrase} {plate} plakalı aracımla {city}{suffix} {damage_phrase}.")
+    parts.append(f"{date_phrase} {plate} plakalı aracımla {location} {damage_phrase}.")
 
     # Injury (only if true).
     if expected["injury"]:
@@ -197,8 +224,7 @@ def build_transcript(gt: dict, dicts: dict) -> tuple[str, str]:
     date_phrase = make_date_phrase(
         expected["incident_date"], gt["received_at"], dicts["relative_dates"]
     )
-    city = expected["incident_location"]["city"]
-    suffix = CITY_SUFFIX.get(city, "'de")
+    location = resolve_location(expected)
 
     def filler() -> str:
         """Return a filler word 40% of the time, else empty."""
@@ -216,7 +242,7 @@ def build_transcript(gt: dict, dicts: dict) -> tuple[str, str]:
             ]
         )
     )
-    turns.append(f"Müşteri: {filler()}{date_phrase} {city}{suffix} {damage_phrase}.")
+    turns.append(f"Müşteri: {filler()}{date_phrase} {location} {damage_phrase}.")
     turns.append(
         "Ajan: "
         + random.choice(
@@ -370,14 +396,14 @@ def build_form(gt: dict, dicts: dict) -> tuple[str, str]:
     else:
         lines.append(f"Olay Tarihi: {expected['incident_date']}")
 
-    # Location.
+    # Location: keep district in text 60% of the time, else null it in GT.
     city = expected["incident_location"]["city"]
     district = expected["incident_location"].get("district")
     lines.append(f"İl: {city}")
-    if district:
+    if district and random.random() < 0.6:
         lines.append(f"İlçe: {district}")
-
-    lines.append(f"Hasar: {damage_phrase}")
+    else:
+        expected["incident_location"]["district"] = None
 
     # Injury: 10% blank, otherwise evet/hayır.
     if random.random() < 0.1:
