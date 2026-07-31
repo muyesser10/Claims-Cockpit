@@ -386,6 +386,19 @@ def build_form(gt: dict, dicts: dict) -> tuple[str, str]:
     else:
         damage_phrase = "araç hasarlı"
 
+    # Short, telegraphic damage phrase from the form-specific dictionary.
+    damage_type = expected["damage_type"]
+    if damage_type and damage_type in dicts["form_damage_phrases"]:
+        damage_phrase = random.choice(dicts["form_damage_phrases"][damage_type])
+    else:
+        damage_phrase = "araç hasarlı"
+
+    # Free-text description (the real extraction target) from the normal dict.
+    if damage_type and damage_type in dicts["damage_phrases"]:
+        description = random.choice(dicts["damage_phrases"][damage_type])
+    else:
+        description = damage_phrase
+
     lines = []
     lines.append(f"Poliçe No: {expected['policy_no']}")
     lines.append(f"Plaka: {expected['plate']}")
@@ -405,6 +418,10 @@ def build_form(gt: dict, dicts: dict) -> tuple[str, str]:
     else:
         expected["incident_location"]["district"] = None
 
+    # Damage: short label + free-text description (extraction's real work).
+    lines.append(f"Hasar: {damage_phrase}")
+    lines.append(f"Açıklama: {description}")
+
     # Injury: 10% blank, otherwise evet/hayır.
     if random.random() < 0.1:
         lines.append("Yaralanma: ")
@@ -423,7 +440,7 @@ def build_form(gt: dict, dicts: dict) -> tuple[str, str]:
     lines.append(f"Ad Soyad: {personal['name']}")
     lines.append(f"Telefon: {personal['phone']}")
 
-    return "\n".join(lines), damage_phrase
+    return "\n".join(lines), description
 
 
 app = typer.Typer()

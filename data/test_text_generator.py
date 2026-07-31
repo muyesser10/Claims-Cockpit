@@ -103,16 +103,19 @@ def test_transcript_null_amount_not_in_text():
 
 
 def test_form_is_labeled_and_telegraphic():
-    """Form is labeled plain text with a short damage phrase."""
+    """Form is labeled text with both a short damage label and free-text description."""
     random.seed(42)
     dicts = load_dictionaries()
     gt = _sample_gt()
-    text, damage_phrase = build_form(gt, dicts)
+    text, description = build_form(gt, dicts)
     assert "Poliçe No:" in text
     assert "Plaka:" in text
     assert gt["_personal"]["name"] in text
-    # Form damage phrase comes from the telegraphic dictionary.
-    assert damage_phrase in dicts["form_damage_phrases"]["glass"]
+    # Both the telegraphic "Hasar:" label and the free-text "Açıklama:" appear.
+    assert "Hasar:" in text
+    assert "Açıklama:" in text
+    # The returned value is the free-text description (goes to damage_description).
+    assert description in dicts["damage_phrases"]["glass"]
 
 
 def test_form_null_amount_not_in_text():
