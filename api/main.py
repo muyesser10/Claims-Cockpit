@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from api.routers import claims, ingest
+from api.routers import claims, ingest, queue
 
 app = FastAPI(title="Claims-Cockpit API", version="0.1.1")
 
@@ -16,6 +16,7 @@ app.add_middleware(
 
 app.include_router(ingest.router)
 app.include_router(claims.router)
+app.include_router(queue.router)
 
 
 @app.get("/health")
