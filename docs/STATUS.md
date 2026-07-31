@@ -39,6 +39,7 @@
 - [x] `worker/extraction/schema.py` — extraction çıktı sözleşmesi (Pydantic): claim.json alanları + kanıt/güven/eksik alan blokları; claim.json senkron testi — @Cagri12345
 - [x] **worker/main.py gerçek Redis tüketicisi + pipeline (S1-5)** — `claims:incoming`'den BRPOP ile id çekiyor, `masking` → deterministik yaralanma kuralıyla `classification` → `Claim` oluşturup `routing` adımlarını çalıştırıyor, her adımda `audit_trail`'e gerçek satır yazıyor — @nursenakyga
 - [x] `worker/llm/client.py` — OpenAI istemcisi (instructor + Pydantic): iki kademe, seed, zaman aşımı, iki katmanlı retry, denetim izi logu — @Cagri12345. **NOT: pipeline'a henüz bağlı değil** — classification hâlâ deterministik keyword kuralı.
+- [x] **Canlı LLM doğrulaması + şema optimizasyonu** — gerçek gpt-4o çağrısı yapıldı: `create_with_completion` doğrulandı, `source_references` düz metne çevrildi. Mesaj başına 3 istek → 1, 7.343 → 1.554 token, 14,8 → 8,7 sn — @Cagri12345
 - [x] **web/ Vite entry point** (S1-13) — @bariss9/@nursenakyga. index.html, vite.config.ts, src/main.tsx
 - [x] **Ham liste ekranı (S1-8)** — @bariss9. Pano'da claims tablosu, urgency'e göre sıralama + kritik/yüksek vurgu, `/api/claims` 3sn polling (`useClaims` hook + `ClaimsTable` component)
 
@@ -89,6 +90,7 @@
 | Bekleyen | Beklenen şey | Kimden | Durum |
 |----------|--------------|--------|-------|
 | Backend ikilisi | LLM istemcisinin pipeline'a bağlanması | @Cagri12345 | client.py hazır, worker entegrasyonu sırada |
+| Backend ikilisi | extraction (prompt + extractor) | @Cagri12345 | şema + istemci merge edildi, canlı doğrulandı; sırada `prompts/extraction_v1.txt` |
 | source_references offset | extraction adımının pipeline'a girmesi | @Cagri12345 / BE | quote üretiliyor, start/end hesabı yok |
 | **MERGE BLOKERİ** | **eval kodu ↔ claim.json alan adı uyuşmazlığı** | **@MehmetTayyip** | **DS branch Türkçe alan adı kullanıyor (police_no/plaka), claim.json İngilizce. Eval GT'yi okuyamaz. Standup'ta çözülmeli.** |
 
@@ -102,7 +104,9 @@
 - `.env.example` `postgresql://` ile başlıyor; kod `+psycopg`'ye çeviriyor. İleride düzeltme ekiple konuşulacak.
 - Yerel Postgres çakışması (bariss9): db override ile 5433'te (kişisel).
 - isim sözlüğü v0 Türkçe karaktersiz; "Hüseyin" eşleşmez — Sprint 2.
-- OpenAI maliyeti/kotası — eval koşusu toplu çağrı yapar. `DEMO_OFFLINE` için artık yerel model yok, kayıtlı fixture gerekiyor (Sprint 4). Çalışan fallback katmanı henüz yazılmadı, sadece anahtarlar duruyor. Bkz. ADR-001.
+- OpenAI maliyeti ölçüldü: extraction mail başına ~1.550 token / ~8,7 sn (gpt-4o, tek istek). 46 maillik eval koşusu ~$0.20. `DEMO_OFFLINE` için yerel model yok, kayıtlı fixture gerekiyor (Sprint 4). Çalışan fallback katmanı henüz yazılmadı, sadece anahtarlar duruyor. Bkz. ADR-001.
+- `data/dictionaries/opening_templates.txt` 12. satırda "dün" sabit yazılı ve gövdedeki gerçek tarihle çelişiyor — 46 mailin 5'i (GT-000001/3/57/76/99). `make_date_phrase` doğru çalışıyor, sorun yalnız bu şablonda. @muyesser10'a iletildi.
+- `injury` / `counterparty_exists`: metin sessizse GT `false`, extraction sözleşmesi `null` diyor. Eval normalizasyonunda `null` = `false` eşlenecek; şema değişmiyor (bilgi kaybı olmasın).
 
 ---
 
@@ -112,6 +116,7 @@
 - claim.json: damage_type 8 değer; source_references offset'li {quote,start,end}; status sistem alanı; city/district; estimated_amount nullable number; incident_date ISO.
 - external_ref: GT eşleştirme için ingest'e opsiyonel alan. received_at override: GT'de sabit zaman.
 - Masking: regex önce, isim sözlüğü sonra; plaka 1-3 harf; v0 sözlük ~42 isim. Hata olursa audit_trail'e masking_error yazılıyor.
+- extraction `source_references`: LLM'den düz alıntı metni (`dict[str, str]`). `{quote,start,end}` nihai kayıt şekli olarak `claim.json`'da kalıyor, offset'i pipeline hesaplar. Ölçüm: sarmalayıcı nesne mesaj başına 2 fazla LLM çağrısına yol açıyordu.
 - LLM sağlayıcı: OpenAI iki kademe (gpt-4o-mini / gpt-4o) — ADR-001. Eski sağlayıcı anahtarları `.env.example`'da fallback başlığı altında duruyor, kod okumuyor. **Embedding yerel 384 (değişmedi).** SQLAlchemy senkron (psycopg3); Python 3.11.
 - web servisi: bind mount + anonymous node_modules volume ile live-reload (S1-8 sırasında eklendi).
 

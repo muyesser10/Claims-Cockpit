@@ -66,14 +66,43 @@ def test_realistic_record_parses():
         counterparty_exists=True,
         estimated_amount=88841,
         missing_fields=["district"],
-        source_references={"plate": {"quote": "06 FGB 3815 plakalı"}},
+        source_references={"plate": "06 FGB 3815 plakalı"},
         field_confidence={"plate": 0.99, "incident_date": 0.85},
         low_confidence_fields=[],
     )
     assert claim.incident_date == date(2026, 7, 8)
     assert claim.damage_type is DamageType.THEFT
     assert claim.estimated_amount == 88841.0
-    assert claim.source_references["plate"].quote == "06 FGB 3815 plakalı"
+    assert claim.source_references["plate"] == "06 FGB 3815 plakalı"
+
+
+def test_plain_string_quote_is_the_contract():
+    """What gpt-4o produces unprompted, and what the schema now asks for."""
+    claim = ClaimExtraction(
+        reasoning="x",
+        source_references={"plate": "34 ABC 123 plakalı"},
+    )
+    assert claim.source_references["plate"] == "34 ABC 123 plakalı"
+
+
+def test_wrapped_quote_is_flattened_instead_of_retried():
+    """Measured 2026-07-30: a nested single-key object cost two extra calls.
+
+    gpt-4o answered with a bare string first, then guessed the key `text`, and
+    only reached `quote` once the validation error spelled the name out. All
+    three shapes carry the same information, so all three are accepted.
+    """
+    claim = ClaimExtraction(
+        reasoning="x",
+        source_references={
+            "plate": {"quote": "34 ABC 123 plakalı"},
+            "policy_no": {"text": "Poliçe numaram POL-1"},
+        },
+    )
+    assert claim.source_references == {
+        "plate": "34 ABC 123 plakalı",
+        "policy_no": "Poliçe numaram POL-1",
+    }
 
 
 def test_damage_type_outside_the_enum_is_rejected():

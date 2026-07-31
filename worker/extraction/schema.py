@@ -14,15 +14,16 @@ Only extraction-owned fields live here. Deliberately left out:
 from datetime import date
 from enum import StrEnum
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class DamageType(StrEnum):
-    """Damage categories.
+    """Hasar türü kategorileri."""
 
-    MUST stay in sync with schemas/claim.json — test_schema.py enforces it.
-    """
-
+    # Docstrings in this file are not comments — pydantic ships them to the
+    # model as part of the tool schema, so repo-internal notes stay in `#`
+    # comments. MUST stay in sync with schemas/claim.json; test_schema.py
+    # enforces it.
     COLLISION = "collision"
     SINGLE_VEHICLE = "single_vehicle"
     GLASS = "glass"
@@ -34,7 +35,7 @@ class DamageType(StrEnum):
 
 
 class IncidentLocation(BaseModel):
-    """Where it happened. Either half may be absent from the text."""
+    """Olayın gerçekleştiği yer."""
 
     city: str | None = Field(
         default=None,
@@ -46,25 +47,18 @@ class IncidentLocation(BaseModel):
     )
 
 
-class SourceQuote(BaseModel):
-    """Evidence for one extracted field: the exact words the model used.
-
-    The model fills in `quote` only. Character offsets are resolved later by
-    the pipeline (design doc §3.2) — asking a language model for character
-    positions invites invented numbers.
-    """
-
-    quote: str = Field(
-        description="Ham metinden BİREBİR alıntı. Kelimeleri değiştirme, kısaltma.",
-    )
+# Keys the model reaches for when it decides to wrap a quote in an object
+# anyway. Measured 2026-07-30 on gpt-4o: its first answer was a bare string,
+# and once the validation error pushed it into an object it invented `text`.
+# Both cost a retry, so both are now flattened instead of rejected.
+_QUOTE_KEYS = ("quote", "text", "value")
 
 
 class ClaimExtraction(BaseModel):
-    """What the model returns for a single claim message.
+    """Tek bir hasar ihbarı mesajından çıkarılan yapılandırılmış veri."""
 
-    Field order is deliberate: `reasoning` comes first so the model works out
-    relative dates and contradictions before it commits to any value.
-    """
+    # Field order is deliberate: `reasoning` comes first so the model works out
+    # relative dates and contradictions before it commits to any value.
 
     # Reasoning first (design doc §3.3). Not persisted to the final record;
     # it stays in the raw log so a wrong answer can be traced back later.
@@ -141,13 +135,17 @@ class ClaimExtraction(BaseModel):
     )
 
     # Principle 2 — evidence. Every value must be traceable to the raw text.
-    # The pipeline searches each quote in the source; a quote that is not
-    # found marks the field as unreliable.
-    source_references: dict[str, SourceQuote] = Field(
+    # The pipeline searches each quote in the source; a quote that is not found
+    # marks the field as unreliable. Offsets are resolved there as well (design
+    # doc §3.2), so the model only ever sends the text — a plain string, which
+    # is also the shape it produces unprompted.
+    source_references: dict[str, str] = Field(
         default_factory=dict,
         description=(
             "Doldurduğun HER alan için ham metinden birebir alıntı. "
-            "Anahtar alan adı olmalı (ör. 'plate'). Alıntı metinde aynen geçmeli."
+            'Anahtar alan adı, değer alıntının kendisi olsun: {"plate": "34 ABC 123 plakalı"}. '
+            'İç içe alanlarda nokta kullan: "incident_location.city". '
+            "Alıntı ham metinde aynen geçmeli — kelimeleri değiştirme, kısaltma."
         ),
     )
 
@@ -163,3 +161,23 @@ class ClaimExtraction(BaseModel):
         default_factory=list,
         description="Doldurdun ama emin olmadığın alanların adları.",
     )
+
+    @field_validator("source_references", mode="before")
+    @classmethod
+    def _unwrap_quotes(cls, value: object) -> object:
+        """Tolerate a wrapped quote instead of paying for a retry.
+
+        A plain string is the contract, but a model that wraps it anyway should
+        not cost two extra calls: a nested single-key object was measured at
+        three requests per message where one would do. Anything unrecognised is
+        passed through untouched so it still fails validation loudly.
+        """
+        if not isinstance(value, dict):
+            return value
+
+        flat = {}
+        for field, ref in value.items():
+            if isinstance(ref, dict):
+                ref = next((ref[key] for key in _QUOTE_KEYS if key in ref), ref)
+            flat[field] = ref
+        return flat
