@@ -1,6 +1,8 @@
 # analiz/eval/kosucu.py
 import pandas as pd
-from analiz.eval.metrikler import alan_dogruluk, siniflandirma_f1, halusinasyon_orani
+
+from analiz.eval.metrikler import alan_dogruluk, halusinasyon_orani, siniflandirma_f1
+
 
 def degerlendir(df: pd.DataFrame) -> dict:
     """

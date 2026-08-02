@@ -6,7 +6,9 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
 import pandas as pd
+
 from analiz.eval.kosucu import degerlendir
+
 
 def calistir():
     # Sistemimizi test etmek için 2 satırlık sentetik veri seti oluşturuyoruz
@@ -25,7 +27,10 @@ def calistir():
             "tahmin_icerik_tipi": "hasar_ihbari",
             "gt_aciliyet": "normal",
             "tahmin_aciliyet": "normal",
-            "ham_metin": "Dün yağmurlu havada giderken 1999 model Toyota Corolla 1.6 aracımla kayıp bariyerlere çarptım. 4A-FE motor bloğuna kadar hasar ulaştı.",
+            "ham_metin": (
+                "Dün yağmurlu havada giderken 1999 model Toyota Corolla 1.6 aracımla "
+                "kayıp bariyerlere çarptım. 4A-FE motor bloğuna kadar hasar ulaştı."
+            ),
             "kaynak_referanslari": {
                 "plaka": {"alinti": "38 MTT 99"}, 
                 "hasar": {"alinti": "bariyerlere çarptım"}
