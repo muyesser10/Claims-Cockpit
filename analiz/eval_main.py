@@ -21,9 +21,7 @@ def ana_dongu():
     print(f"[+] Toplam {len(df_veriset)} kayıt başarıyla yüklendi.\n")
 
     # 2. Modeli Değerlendir
-    print(
-        "[+] Metrik hesaplamaları yapılıyor (Sınıflandırma, Halüsinasyon, Alan Doğruluğu)...\n"
-    )
+    print("[+] Metrik hesaplamaları yapılıyor (Sınıflandırma, Halüsinasyon, Alan Doğruluğu)...\n")
     rapor = degerlendir(df_veriset)
 
     # 3. Sonuçları Ekrana Bas

@@ -17,7 +17,7 @@ def calistir():
             # 1. Kayıt: Kusursuz bir tahmin simülasyonu
             "tahmin_police_no": "POL-123",
             "gt_police_no": "POL-123",
-            "tahmin_plaka": "38 MTT 99", 
+            "tahmin_plaka": "38 MTT 99",
             "gt_plaka": "38 MTT 99",
             "tahmin_olay_tarihi": "2026-07-25",
             "gt_olay_tarihi": "2026-07-25",
@@ -32,42 +32,43 @@ def calistir():
                 "kayıp bariyerlere çarptım. 4A-FE motor bloğuna kadar hasar ulaştı."
             ),
             "kaynak_referanslari": {
-                "plaka": {"alinti": "38 MTT 99"}, 
-                "hasar": {"alinti": "bariyerlere çarptım"}
-            }
+                "plaka": {"alinti": "38 MTT 99"},
+                "hasar": {"alinti": "bariyerlere çarptım"},
+            },
         },
         {
             # 2. Kayıt: Hatalı tahminler ve halüsinasyon içeren bir simülasyon
             "tahmin_police_no": "POL-456",
             "gt_police_no": "POL-456",
-            "tahmin_plaka": "34 Z 0000", 
+            "tahmin_plaka": "34 Z 0000",
             "gt_plaka": "34 Z 0000",
             "tahmin_olay_tarihi": "2026-07-25",
-            "gt_olay_tarihi": None, # Hata (Ground Truth'da yok ama LLM bulmuş)
+            "gt_olay_tarihi": None,  # Hata (Ground Truth'da yok ama LLM bulmuş)
             "tahmin_hasar_aciklamasi": "Park halinde çarpma",
             "gt_hasar_aciklamasi": "Park halinde çarpma",
             "gt_icerik_tipi": "hasar_ihbari",
-            "tahmin_icerik_tipi": "diger", # Hata (Yanlış sınıflandırma)
+            "tahmin_icerik_tipi": "diger",  # Hata (Yanlış sınıflandırma)
             "gt_aciliyet": "acil",
-            "tahmin_aciliyet": "normal", # Hata (Yanlış aciliyet)
+            "tahmin_aciliyet": "normal",  # Hata (Yanlış aciliyet)
             "ham_metin": "Aracıma park halindeyken çarpmışlar.",
             "kaynak_referanslari": {
-                "hasar": {"alinti": "camlar tuz buza dönmüş"} # Halüsinasyon (Ham metinde geçmiyor)
-            }
-        }
+                "hasar": {"alinti": "camlar tuz buza dönmüş"}  # Halüsinasyon (Ham metinde geçmiyor)
+            },
+        },
     ]
-    
+
     df = pd.DataFrame(veri)
-    
+
     # Koşucuyu çalıştır ve raporu al
     rapor = degerlendir(df)
-    
-    print("\n" + "="*40)
+
+    print("\n" + "=" * 40)
     print(" 🚀 MODEL DEĞERLENDİRME RAPORU")
-    print("="*40)
+    print("=" * 40)
     for anahtar, deger in rapor.items():
         print(f" 📊 {anahtar.upper()}: {deger}")
-    print("="*40 + "\n")
+    print("=" * 40 + "\n")
+
 
 if __name__ == "__main__":
     calistir()

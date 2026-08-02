@@ -42,27 +42,15 @@ def siniflandirma_raporu(df: pd.DataFrame) -> dict:
     ve Confusion Matrix (Karmaşıklık Matrisi) verilerini hesaplar.
     """
     # 1. F1 Skorları
-    icerik_f1 = f1_score(
-        df["gt_icerik_tipi"], df["tahmin_icerik_tipi"], average="macro"
-    )
-    aciliyet_f1 = f1_score(
-        df["gt_aciliyet"], df["tahmin_aciliyet"], average="macro"
-    )
+    icerik_f1 = f1_score(df["gt_icerik_tipi"], df["tahmin_icerik_tipi"], average="macro")
+    aciliyet_f1 = f1_score(df["gt_aciliyet"], df["tahmin_aciliyet"], average="macro")
 
     # 2. Etiketleri Çıkar (Matrisin satır/sütun başlıkları için)
     icerik_etiketler = sorted(
-        list(
-            set(df["gt_icerik_tipi"].dropna()).union(
-                set(df["tahmin_icerik_tipi"].dropna())
-            )
-        )
+        list(set(df["gt_icerik_tipi"].dropna()).union(set(df["tahmin_icerik_tipi"].dropna())))
     )
     aciliyet_etiketler = sorted(
-        list(
-            set(df["gt_aciliyet"].dropna()).union(
-                set(df["tahmin_aciliyet"].dropna())
-            )
-        )
+        list(set(df["gt_aciliyet"].dropna()).union(set(df["tahmin_aciliyet"].dropna())))
     )
 
     # 3. Confusion Matrix Hesaplama

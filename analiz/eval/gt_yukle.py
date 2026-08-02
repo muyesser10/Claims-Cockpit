@@ -19,15 +19,10 @@ def gt_verisini_getir(dosya_yolu: str = None) -> pd.DataFrame:
         elif dosya_yolu.endswith(".jsonl"):
             return pd.read_json(dosya_yolu, lines=True)
         else:
-            raise ValueError(
-                "Desteklenmeyen format. Sadece CSV, JSON veya JSONL desteklenir."
-            )
+            raise ValueError("Desteklenmeyen format. Sadece CSV, JSON veya JSONL desteklenir.")
 
     # Dosya yoksa Sprint 1 testi için 100 kayıtlık veri simülasyonu üret
-    print(
-        "Sistem Mesajı: Gerçek GT veri yolu bulunamadı. "
-        "100 kayıtlık test verisi üretiliyor..."
-    )
+    print("Sistem Mesajı: Gerçek GT veri yolu bulunamadı. 100 kayıtlık test verisi üretiliyor...")
 
     mock_data = []
     for i in range(1, 101):
