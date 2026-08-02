@@ -8,6 +8,7 @@ from worker.extraction.extractor import extract
 from worker.masking.pipeline import mask_all
 from worker.masking.unmask import unmask_data
 from worker.shared.injury_terms import INJURY_TERMS, _normalize_tr
+from worker.validation.validator import validate
 
 logger = logging.getLogger("worker.pipeline")
 
@@ -113,11 +114,7 @@ def step_extract(db: Session, msg: RawMessage, claim: Claim, masked_text: str) -
             message_id=str(msg.id),
         )
 
-        mappings = (
-            db.query(MaskMapping)
-            .filter(MaskMapping.raw_message_id == msg.id)
-            .all()
-        )
+        mappings = db.query(MaskMapping).filter(MaskMapping.raw_message_id == msg.id).all()
         mapping_dicts = [
             {"placeholder": m.placeholder, "real_value": m.real_value} for m in mappings
         ]
@@ -138,6 +135,8 @@ def step_extract(db: Session, msg: RawMessage, claim: Claim, masked_text: str) -
             duration_ms=result.duration_ms,
         )
 
+        step_validate(db, msg, claim, masked_text, unmasked_extraction)
+
     except Exception as e:
         logger.error(f"raw_message_id={msg.id} extraction failed: {e}", exc_info=True)
         log_audit(
@@ -150,6 +149,23 @@ def step_extract(db: Session, msg: RawMessage, claim: Claim, masked_text: str) -
         # claim.status is intentionally left as-is (in_human_review) —
         # an extraction failure must not send the claim to dead_letter,
         # see standup decision with Çağrı.
+
+
+def step_validate(
+    db: Session, msg: RawMessage, claim: Claim, masked_text: str, extraction: dict
+) -> None:
+    merged = {**extraction, "urgency": claim.urgency, "content_type": claim.content_type}
+    flags = validate(merged, masked_text)
+
+    claim.data = {**(claim.data or {}), "validation_flags": flags}
+
+    log_audit(
+        db,
+        "validation",
+        raw_message_id=msg.id,
+        claim_id=claim.id,
+        detail={"flag_count": len(flags), "flags": flags},
+    )
 
 
 def process_message(db: Session, raw_message_id: int) -> None:
