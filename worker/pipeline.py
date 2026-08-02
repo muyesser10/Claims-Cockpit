@@ -4,8 +4,11 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from api.models.db import AuditTrail, Claim, MaskMapping, RawMessage
+from worker.extraction.extractor import extract
 from worker.masking.pipeline import mask_all
+from worker.masking.unmask import unmask_data
 from worker.shared.injury_terms import INJURY_TERMS, _normalize_tr
+from worker.validation.validator import validate
 
 logger = logging.getLogger("worker.pipeline")
 
@@ -21,6 +24,8 @@ def log_audit(
     raw_message_id: int | None = None,
     claim_id: int | None = None,
     detail: dict[str, Any] | None = None,
+    provider: str | None = None,
+    duration_ms: int | None = None,
 ) -> None:
     db.add(
         AuditTrail(
@@ -28,6 +33,8 @@ def log_audit(
             claim_id=claim_id,
             step=step,
             detail=detail or {},
+            provider=provider,
+            duration_ms=duration_ms,
         )
     )
     logger.info(f"AUDIT | raw_message_id={raw_message_id} | step={step} | detail={detail}")
@@ -98,6 +105,69 @@ def step_route(db: Session, msg: RawMessage, masked_text: str, urgency: str) -> 
     return claim
 
 
+def step_extract(db: Session, msg: RawMessage, claim: Claim, masked_text: str) -> None:
+    try:
+        result = extract(
+            masked_text,
+            received_at=msg.received_at,
+            channel=msg.channel,
+            message_id=str(msg.id),
+        )
+
+        mappings = db.query(MaskMapping).filter(MaskMapping.raw_message_id == msg.id).all()
+        mapping_dicts = [
+            {"placeholder": m.placeholder, "real_value": m.real_value} for m in mappings
+        ]
+        unmasked_extraction = unmask_data(result.extraction, mapping_dicts)
+
+        claim.data = {**(claim.data or {}), "extraction": unmasked_extraction}
+
+        log_audit(
+            db,
+            "extraction",
+            raw_message_id=msg.id,
+            claim_id=claim.id,
+            detail={
+                "reasoning": result.reasoning,
+                "unverified_fields": result.unverified_fields,
+            },
+            provider=result.model,
+            duration_ms=result.duration_ms,
+        )
+
+        step_validate(db, msg, claim, masked_text, unmasked_extraction)
+
+    except Exception as e:
+        logger.error(f"raw_message_id={msg.id} extraction failed: {e}", exc_info=True)
+        log_audit(
+            db,
+            "extraction_error",
+            raw_message_id=msg.id,
+            claim_id=claim.id,
+            detail={"error": str(e)},
+        )
+        # claim.status is intentionally left as-is (in_human_review) —
+        # an extraction failure must not send the claim to dead_letter,
+        # see standup decision with Çağrı.
+
+
+def step_validate(
+    db: Session, msg: RawMessage, claim: Claim, masked_text: str, extraction: dict
+) -> None:
+    merged = {**extraction, "urgency": claim.urgency, "content_type": claim.content_type}
+    flags = validate(merged, masked_text)
+
+    claim.data = {**(claim.data or {}), "validation_flags": flags}
+
+    log_audit(
+        db,
+        "validation",
+        raw_message_id=msg.id,
+        claim_id=claim.id,
+        detail={"flag_count": len(flags), "flags": flags},
+    )
+
+
 def process_message(db: Session, raw_message_id: int) -> None:
     msg = db.get(RawMessage, raw_message_id)
     if msg is None:
@@ -107,7 +177,8 @@ def process_message(db: Session, raw_message_id: int) -> None:
     try:
         masked_text = step_mask(db, msg)
         urgency = step_classify(db, msg, masked_text)
-        step_route(db, msg, masked_text, urgency)
+        claim = step_route(db, msg, masked_text, urgency)
+        step_extract(db, msg, claim, masked_text)
         db.commit()
         logger.info(f"raw_message_id={raw_message_id} | pipeline completed | status={msg.status}")
     except Exception as e:
