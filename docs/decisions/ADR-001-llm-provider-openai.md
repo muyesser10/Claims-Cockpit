@@ -49,6 +49,33 @@ the dimension means a migration and re-embedding everything, owned by
 @bariss9. The model itself is picked later from 2-3 candidates measured on real
 eval data (design doc §10).
 
+## Update — 2026-08-02: extraction moves to the cheap tier
+
+The tier table above was written before either model had been measured on this
+task. It has now been measured.
+
+100 records from `data/texts.jsonl` (50 email / 30 transcript / 20 form), one
+prompt, one seed, scored against the enriched ground truth with `gpt-4o-mini`:
+
+| | measured | target (CLAUDE.md §7) |
+| --- | ---: | --- |
+| required-field accuracy | 99.4% | ≥ 82% |
+| unsupported-value rate | 3.9% | ≤ 7% |
+
+An earlier eight-record comparison had put gpt-4o and gpt-4o-mini level — 98.4%
+each, one request each, no retries. The strong tier was chosen on the assumption
+that extraction would need it. The measurement does not support that assumption,
+and the cheap tier costs a fraction as much: a full 1000-record eval run lands in
+cents rather than dollars, which matters because eval is meant to run weekly.
+
+`worker/extraction/extractor.py` therefore defaults to `ModelTier.CHEAP`. The
+`tier` parameter stays, so eval can put both tiers on the same sample again if
+the data or the prompt changes materially.
+
+**Unchanged:** the two-tier client itself, and the strong tier's other intended
+uses — Text-to-SQL and RAG answers. Neither has been measured; this update
+speaks only for extraction.
+
 ## Alternatives considered
 
 | Alternative | Pro | Con |

@@ -105,6 +105,20 @@ def test_wrapped_quote_is_flattened_instead_of_retried():
     }
 
 
+def test_null_confidence_is_dropped_instead_of_rejected():
+    """Measured 2026-08-01: a null score here cost two calls, three attempts each.
+
+    The model reports `"injury": null` when it leaves injury null. Refusing that
+    buys nothing — the entry says only "no value, so no confidence".
+    """
+    claim = ClaimExtraction(
+        reasoning="x",
+        plate="34 ABC 123",
+        field_confidence={"plate": 0.9, "injury": None, "counterparty_exists": None},
+    )
+    assert claim.field_confidence == {"plate": 0.9}
+
+
 def test_damage_type_outside_the_enum_is_rejected():
     """'hırsızlık' is not one of the eight values, so the model gets corrected."""
     with pytest.raises(ValidationError):
