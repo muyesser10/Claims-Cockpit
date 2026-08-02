@@ -36,6 +36,9 @@ değerleri oradan al.
    - Alıntıyı dar tut; alanı doğrulayan en kısa parça yeterli.
    - Anahtar alan adı olmalı. İç içe alanlarda nokta kullan:
      "incident_location.city"
+   - Alıntılar örtüşebilir. Her alan için AYRI alıntı ver, tek alıntıyı iki
+     alana paylaştırma. "İzmir Buca'da" ifadesinde il için "İzmir", ilçe için
+     "Buca" yaz.
 
 5. GÜVEN
    field_confidence'a doldurduğun her alan için 0.0-1.0 arası değer yaz.
@@ -46,6 +49,9 @@ değerleri oradan al.
    injury ve counterparty_exists için: metin "yaralanan yok" ya da "karşı taraf
    yoktu" demiyorsa false YAZMA, null bırak.
    Bahsedilmemesi, olmadığı anlamına gelmez.
+
+   counterparty_exists yalnızca olayda BAŞKA BİR ARAÇ varsa true olur.
+   Hayvan, direk, duvar, bariyer, düşen cisim karşı taraf değildir.
 
 7. MASKELENMİŞ VERİ
    Metinde [PLAKA_1], [TC_1], [TELEFON_1], [AD_1] gibi yer tutucular görebilirsin;
@@ -74,11 +80,16 @@ değerleri oradan al.
                    bilinmeyen bir aracın sürtüp kaçması.
 
    AYIRT ETME KURALLARI
-   - Cam kırılıp içeriden eşya alındıysa: theft (glass değil).
-   - Çarpan araç kaçtıysa ve kim olduğu bilinmiyorsa: other (collision değil).
-   - Dolu dışındaki hava ve doğa olayları: other (hail değil).
-   - Hangi kategoriye girdiği metinden anlaşılmıyorsa null bırak, 'other' deme.
-     'other' yukarıdaki listedeki olaylar için, "bilmiyorum" için değil.
+   - Araç sabit bir engele çarptıysa (bariyer, direk, duvar, kaldırım, bordür,
+     çukur) single_vehicle. Araca DIŞARIDAN bir şey geldiyse (düşen cisim, sıva,
+     ağaç dalı, sel, sıçrayan malzeme, açık rögar kapağı) other.
+   - Olayda hayvan varsa animal — çarpma da olsa single_vehicle deme.
+   - Cam kırılıp içeriden eşya alındıysa theft (glass değil).
+   - Çarpan araç kaçtıysa ve kim olduğu bilinmiyorsa other (collision değil).
+   - Dolu dışındaki hava ve doğa olayları other (hail değil).
+   - Metinde hasarın NASIL oluştuğu anlatılıyorsa mutlaka bir tür seç. null
+     yalnızca hasarın ne olduğu hiç yazmıyorsa. 'other' listelenen olaylar için,
+     "bilmiyorum" için değil.
 
 # ÖRNEKLER
 

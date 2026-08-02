@@ -101,6 +101,14 @@ def filled_field_names(answer: ClaimExtraction) -> list[str]:
     return names
 
 
+def field_value(answer: ClaimExtraction, name: str) -> object:
+    """Read a field by its dotted name, the same form used in source_references."""
+    if "." in name:
+        parent, child = name.split(".", 1)
+        return getattr(getattr(answer, parent), child)
+    return getattr(answer, name)
+
+
 def resolve_references(
     answer: ClaimExtraction, text: str
 ) -> tuple[dict[str, SourceReference], list[str]]:
@@ -116,9 +124,21 @@ def resolve_references(
         else:
             resolved[field] = SourceReference(quote=quote, start=span[0], end=span[1])
 
-    # A value with no quote at all is just as unsupported as one whose quote
-    # cannot be found in the text.
-    unverified += [name for name in filled_field_names(answer) if name not in resolved]
+    # A filled field with no quote of its own is not automatically unsupported.
+    # Measured 2026-08-01: where the text reads "İzmir Buca'da", the model files
+    # one quote under incident_location.city and leaves district without one —
+    # 21 of 39 flags came from that alone. If the value itself is in the source,
+    # that is evidence; if it is not, the field stays flagged.
+    for name in filled_field_names(answer):
+        if name in resolved:
+            continue
+        span = locate_quote(str(field_value(answer, name)), text)
+        if span is None:
+            unverified.append(name)
+        else:
+            resolved[name] = SourceReference(
+                quote=text[span[0] : span[1]], start=span[0], end=span[1]
+            )
 
     return resolved, unverified
 
@@ -131,7 +151,7 @@ def extract(
     message_id: str,
     client: LlmClient | None = None,
     seed: int | None = None,
-    tier: ModelTier = ModelTier.STRONG,
+    tier: ModelTier = ModelTier.CHEAP,
     system_prompt: str | None = None,
 ) -> ExtractionResult:
     """Run one extraction over `text`, which the pipeline has already masked.
@@ -139,9 +159,10 @@ def extract(
     `seed` is for eval runs, where week-to-week comparability matters more than
     anything else; the live pipeline leaves it unset.
 
-    `tier` defaults to the strong model, which is what ADR-001 assigns to
-    extraction. It is a parameter so eval can put both tiers on the same sample
-    and settle the cost/accuracy question with numbers rather than opinion.
+    `tier` defaults to the cheap model. ADR-001 first put extraction on the
+    strong tier, before either had been measured; a 100-record run on 2026-08-02
+    scored gpt-4o-mini at 99.4% on the required fields against a target of 82%,
+    so the default moved. The parameter stays so eval can compare tiers.
 
     `system_prompt` defaults to the versioned file. Overriding it lets eval
     compare prompt variants on one sample; the pipeline never passes it.
