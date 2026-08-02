@@ -1,0 +1,178 @@
+# worker/extraction/extractor.py
+"""Extraction step: prompt + LLM client + quote resolution.
+
+Knows nothing about the database. `worker/pipeline.py` calls `extract()` and
+owns persistence, the audit trail and error handling (agreed with @nursenakyga
+on 2026-07-30).
+
+Design doc §3.2, principle 2: every value must be traceable to the source text.
+The model returns quotes; this module locates each one and records its character
+span. A quote that cannot be found is the hallucination signal, so its field is
+demoted to low confidence instead of being trusted.
+"""
+
+import re
+import time
+from datetime import datetime
+from pathlib import Path
+from typing import Any
+
+from pydantic import BaseModel
+
+from worker.extraction.schema import ClaimExtraction
+from worker.llm.client import LlmClient, ModelTier
+
+PROMPT_PATH = Path(__file__).resolve().parents[2] / "prompts" / "extraction_v1.txt"
+
+# Read once: the prompt is static and identical for every message.
+SYSTEM_PROMPT = PROMPT_PATH.read_text(encoding="utf-8")
+
+# Fields the model may fill in, in the dotted form used as source_references keys.
+SCALAR_FIELDS = (
+    "policy_no",
+    "plate",
+    "incident_date",
+    "damage_description",
+    "damage_type",
+    "injury",
+    "counterparty_exists",
+    "estimated_amount",
+)
+
+
+class SourceReference(BaseModel):
+    """A quote and where it sits in the source text — schemas/claim.json shape."""
+
+    quote: str
+    start: int | None = None
+    end: int | None = None
+
+
+class ExtractionResult(BaseModel):
+    """Split by where each part belongs.
+
+    `extraction` goes into Claim.data["extraction"]. `reasoning` and the timing
+    belong in audit_trail, not in the operator-facing record (design doc §3.3).
+    """
+
+    extraction: dict[str, Any]
+    reasoning: str
+    model: str
+    duration_ms: int
+    unverified_fields: list[str]
+
+
+def build_user_content(text: str, received_at: datetime, channel: str) -> str:
+    """The message half of the request. Mirrors the examples inside the prompt."""
+    return (
+        f"Mesajın geliş tarihi: {received_at.isoformat()}\n"
+        f"Kanal: {channel}\n\n"
+        f"--- İHBAR METNİ ---\n{text}"
+    )
+
+
+def locate_quote(quote: str, text: str) -> tuple[int, int] | None:
+    """Return the character span of `quote` inside `text`, or None.
+
+    Exact match first. Failing that, the same words separated by any whitespace:
+    models reflow line breaks, and that alone should not condemn a field.
+    """
+    index = text.find(quote)
+    if index >= 0:
+        return index, index + len(quote)
+
+    words = quote.split()
+    if not words:
+        return None
+
+    pattern = re.compile(r"\s+".join(re.escape(word) for word in words))
+    match = pattern.search(text)
+    return (match.start(), match.end()) if match else None
+
+
+def filled_field_names(answer: ClaimExtraction) -> list[str]:
+    """Names of the fields the model actually filled in, dotted where nested."""
+    names = [name for name in SCALAR_FIELDS if getattr(answer, name) is not None]
+    names += [
+        f"incident_location.{part}"
+        for part in ("city", "district")
+        if getattr(answer.incident_location, part) is not None
+    ]
+    return names
+
+
+def resolve_references(
+    answer: ClaimExtraction, text: str
+) -> tuple[dict[str, SourceReference], list[str]]:
+    """Locate every quote; report the fields whose evidence did not hold up."""
+    resolved: dict[str, SourceReference] = {}
+    unverified: list[str] = []
+
+    for field, quote in answer.source_references.items():
+        span = locate_quote(quote, text)
+        if span is None:
+            resolved[field] = SourceReference(quote=quote)
+            unverified.append(field)
+        else:
+            resolved[field] = SourceReference(quote=quote, start=span[0], end=span[1])
+
+    # A value with no quote at all is just as unsupported as one whose quote
+    # cannot be found in the text.
+    unverified += [name for name in filled_field_names(answer) if name not in resolved]
+
+    return resolved, unverified
+
+
+def extract(
+    text: str,
+    received_at: datetime,
+    channel: str,
+    *,
+    message_id: str,
+    client: LlmClient | None = None,
+    seed: int | None = None,
+    tier: ModelTier = ModelTier.STRONG,
+    system_prompt: str | None = None,
+) -> ExtractionResult:
+    """Run one extraction over `text`, which the pipeline has already masked.
+
+    `seed` is for eval runs, where week-to-week comparability matters more than
+    anything else; the live pipeline leaves it unset.
+
+    `tier` defaults to the strong model, which is what ADR-001 assigns to
+    extraction. It is a parameter so eval can put both tiers on the same sample
+    and settle the cost/accuracy question with numbers rather than opinion.
+
+    `system_prompt` defaults to the versioned file. Overriding it lets eval
+    compare prompt variants on one sample; the pipeline never passes it.
+    """
+    client = client or LlmClient()
+    started = time.perf_counter()
+
+    answer = client.structured(
+        tier=tier,
+        response_model=ClaimExtraction,
+        system_prompt=system_prompt or SYSTEM_PROMPT,
+        user_content=build_user_content(text, received_at, channel),
+        message_id=message_id,
+        seed=seed,
+    )
+    duration_ms = round((time.perf_counter() - started) * 1000)
+
+    references, unverified = resolve_references(answer, text)
+
+    payload = answer.model_dump(mode="json", exclude={"reasoning", "source_references"})
+    payload["source_references"] = {
+        field: reference.model_dump(mode="json") for field, reference in references.items()
+    }
+    # Demote whatever we could not verify. The model's own list is kept, not
+    # replaced — it knows things a text search cannot see.
+    payload["low_confidence_fields"] = sorted(set(answer.low_confidence_fields) | set(unverified))
+
+    return ExtractionResult(
+        extraction=payload,
+        reasoning=answer.reasoning,
+        model=client.settings.model_for(tier),
+        duration_ms=duration_ms,
+        unverified_fields=sorted(set(unverified)),
+    )
