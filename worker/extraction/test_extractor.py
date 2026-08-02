@@ -97,8 +97,22 @@ def test_value_without_any_quote_is_flagged():
 
 
 def test_nested_field_is_reported_in_dotted_form():
-    result = run(ClaimExtraction(reasoning="x", incident_location={"city": "Bursa"}))
+    """A value that is nowhere in the text stays flagged, dotted name and all."""
+    result = run(ClaimExtraction(reasoning="x", incident_location={"city": "Ankara"}))
     assert result.unverified_fields == ["incident_location.city"]
+
+
+def test_value_present_in_the_text_is_its_own_evidence():
+    """The model folds two fields into one quote; the second is still supported.
+
+    Measured 2026-08-01: with "İzmir Buca'da" in the text, the quote lands under
+    incident_location.city and district gets none — 21 of 39 flags came from
+    that. The district name is right there in the source, so it counts.
+    """
+    result = run(ClaimExtraction(reasoning="x", incident_location={"city": "Bursa"}))
+    reference = result.extraction["source_references"]["incident_location.city"]
+    assert TEXT[reference["start"] : reference["end"]] == "Bursa"
+    assert result.unverified_fields == []
 
 
 def test_reasoning_stays_out_of_the_record():
@@ -108,11 +122,12 @@ def test_reasoning_stays_out_of_the_record():
     assert "reasoning" not in result.extraction
 
 
-def test_strong_tier_is_the_default():
+def test_cheap_tier_is_the_default():
+    """Measured 2026-08-02: gpt-4o-mini scored 99.4% over 100 records."""
     client = StubClient(ClaimExtraction(reasoning="x"))
-    extract(TEXT, datetime(2026, 7, 25), "email", message_id="GT-TEST", client=client)
-    assert client.calls[0]["tier"] is ModelTier.STRONG
-    assert client.settings.model_for(ModelTier.STRONG) == "gpt-4o"
+    result = extract(TEXT, datetime(2026, 7, 25), "email", message_id="GT-TEST", client=client)
+    assert client.calls[0]["tier"] is ModelTier.CHEAP
+    assert result.model == "gpt-4o-mini"
 
 
 def test_versioned_prompt_is_used_by_default():
@@ -144,7 +159,7 @@ def test_tier_can_be_overridden_for_eval():
         "email",
         message_id="GT-TEST",
         client=client,
-        tier=ModelTier.CHEAP,
+        tier=ModelTier.STRONG,
     )
-    assert client.calls[0]["tier"] is ModelTier.CHEAP
-    assert result.model == "gpt-4o-mini"
+    assert client.calls[0]["tier"] is ModelTier.STRONG
+    assert result.model == "gpt-4o"

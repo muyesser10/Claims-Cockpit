@@ -112,8 +112,11 @@
 
 ## BİLİNEN SORUNLAR / RİSKLER
 
-- Extraction ölçümleri (9 kayıt, gpt-4o-mini): prompt'a hasar türü tanımları eklenince doğruluk %91,7 → %95,8, e-posta ve transkriptte %100. Kesin taban çizgisi 100 kayıtlık koşuda ölçülecek.
-- 4o ve 4o-mini 8 kayıtta eşit çıktı (%98,4 / %98,4, ikisi de tek istek). ADR-001 değişmedi, üretim gpt-4o; karar 100 kayıtlık koşuya bırakıldı. 3 few-shot yerine 1 örnek de aynı doğruluğu verdi (girdi %25 az) — aynı koşuda ölçülecek.
+- **Extraction taban çizgisi ölçüldü (100 kayıt, gpt-4o-mini, 3 few-shot):** zorunlu alan doğruluğu **%99,4**, kanıtsız alan oranı **%3,9**. CLAUDE.md §7 hedefleri (≥%82, ≤%7) karşılandı. Kanal bazında e-posta %99,2 / transkript %99,6 / form %99,4. Koşu maliyeti ~$0,05.
+- **Extraction artık `gpt-4o-mini` kullanıyor — ADR-001 güncellendi.** 8 kayıtta 4o ile eşit çıkmıştı, 100 kayıtta %99,4 yaptı; güçlü kademeye gerek olmadığı ölçümle görüldü. Text-to-SQL ve RAG hâlâ güçlü kademede, onlar ölçülmedi.
+- Ölçüm gürültüsü: `temperature=0` ve sabit `seed`'e rağmen aynı koşu 800 alanda ±1 alan oynuyor (±%0,13). %0,5'ten küçük farklar anlamlı sayılmamalı.
+- Kalan 5 hatanın 3'ü veri kaynaklı: `collision` kayıtlarının 53'ünde (139'un %38'i) `counterparty_exists=False` — çarpışacak kimse olmadan çarpışma. Ayrıca 3 `collision` kaydında metinde olayın nasıl olduğu hiç yazmıyor. @muyesser10'a iletildi.
+- 3 few-shot örneği yerine 1 örnek aynı doğruluğu verdi ama `damage_type`'ı 22 kez kanıtsız doldurdu (3'e karşı) — tahmin ederek tutturuyordu. 3 örnek kaldı; önbellekleme sayesinde süre farkı da yok.
 - **Veri sürümü:** `text_generator.py`'deki her değişiklik 1000 kaydın neredeyse hepsini değiştiriyor (PR #25'te 991/1000). Taban çizgisi ölçüldükten sonra veri dondurulmalı, yoksa haftalık metrikler kıyaslanamaz — @muyesser10'a iletildi.
 - **DS branch (feature/ds-analiz-kurulum) merge blokeri:** (1) Türkçe alan adları (dil kararı İngilizceydi), (2) eval/ → analiz/ yeniden adlandırılmış (CLAUDE.md dizin sahipliğine aykırı), (3) pandas/scikit-learn requirements'ta yok (CI patlar). Merge öncesi standup.
 - **CLAUDE.md §2/§4 güncel değil:** ADR-001 üçlü router yerine OpenAI'ye geçti ama CLAUDE.md hâlâ eskiyi anlatıyor. Yanlış yönlendirme riski. @bariss9 güncelleyecek.
@@ -122,7 +125,7 @@
 - Yerel Postgres çakışması (bariss9): db override ile 5433'te (kişisel).
 - isim sözlüğü v0 Türkçe karaktersiz; "Hüseyin" eşleşmez — Sprint 2 (S2-5).
 - **`policy_no` formatı:** validation'daki `POL-YYYY-NNNNN` deseni sentetik (gt_generator'dan). @muyesser10 teyit etti: gerçek format değil, sadece test verisi kalıbı. Validation bu yüzden flag'liyor, reddetmiyor — gerçek veri farklı formatta gelirse kırılmaz.
-- OpenAI maliyeti ölçüldü: extraction mail başına ~1.550 token / ~8,7 sn (gpt-4o, tek istek). 46 maillik eval koşusu ~$0.20. `DEMO_OFFLINE` için yerel model yok, kayıtlı fixture gerekiyor (Sprint 4). Çalışan fallback katmanı henüz yazılmadı, sadece anahtarlar duruyor. Bkz. ADR-001.
+- OpenAI maliyeti ölçüldü: extraction mesaj başına ~3.900 girdi + ~330 çıktı token, ~3,9 sn (gpt-4o-mini, tek istek). 100 kayıtlık koşu ~$0,05; 1000 kayıtlık tam koşu birkaç kuruş. Sistem prompt'u her çağrıda aynı olduğu için OpenAI'nin önbelleği devrede (`cached_tokens` çıktıda görünüyor). `DEMO_OFFLINE` için yerel model yok, kayıtlı fixture gerekiyor (Sprint 4). Çalışan fallback katmanı henüz yazılmadı, sadece anahtarlar duruyor. Bkz. ADR-001.
 - `data/dictionaries/opening_templates.txt` 12. satırda "dün" sabit yazılı ve gövdedeki gerçek tarihle çelişiyor — 46 mailin 5'i (GT-000001/3/57/76/99). `make_date_phrase` doğru çalışıyor, sorun yalnız bu şablonda. @muyesser10'a iletildi.
 - `injury` / `counterparty_exists`: metin sessizse GT `false`, extraction sözleşmesi `null` diyor. Eval normalizasyonunda `null` = `false` eşlenecek; şema değişmiyor (bilgi kaybı olmasın).
 
