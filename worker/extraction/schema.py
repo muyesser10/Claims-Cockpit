@@ -162,6 +162,20 @@ class ClaimExtraction(BaseModel):
         description="Doldurdun ama emin olmadığın alanların adları.",
     )
 
+    @field_validator("field_confidence", mode="before")
+    @classmethod
+    def _drop_null_confidence(cls, value: object) -> object:
+        """A field left null has no confidence to report.
+
+        Measured 2026-08-01 over 100 records: the model answers `"injury": null`
+        here when it leaves injury null. That is reasonable, and refusing it cost
+        two whole calls — three attempts each, all rejected for the same reason.
+        The entry carries no information, so it is dropped instead.
+        """
+        if not isinstance(value, dict):
+            return value
+        return {key: score for key, score in value.items() if score is not None}
+
     @field_validator("source_references", mode="before")
     @classmethod
     def _unwrap_quotes(cls, value: object) -> object:
