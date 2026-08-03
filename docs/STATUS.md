@@ -9,80 +9,63 @@
 
 ## ÖZET (bir bakışta)
 
-* **Faz:** Sprint 1 uçtan uca çalışıyor, bitti sayılır. Sprint 2 aktif — kuyruk backend + validation + unmask hazır, masking v2 kod tarafı bitti (2 PR merge bekliyor).
-* **Aktif sprint:** Sprint 2. (Sprint 1'den eval S1-9'un omurgası yazıldı; kalan 3 metrik veri blokerinde.)
-* **Repo durumu:** 6 servis ayakta, uçtan uca akıyor. /ingest → Redis → worker (masking → sanity → classification → routing → extraction → validation) → /claims → Pano ekranı (3sn polling) çalışıyor. Kuyruk backend (/queue, onayla/reddet) eklendi.
-* **Son büyük olay:** S2-5 Masking v2 tamamlandı (kod tarafı) — isim sözlüğü ~1550'ye çıktı (Faker/turkish_names.txt), ambiguous-isim context kuralı (soyisim bitişikliği VEYA bağlam işareti), LLM sanity tarama eklendi (masking sonrası PII kaçak kontrolü, kaçak bulunursa extraction atlanıyor).
-* **Sıradaki iş (BE):** S2-7 onay kuyruğu ekranı (review'da, PR #32), 2 yeni masking PR'ının merge'i (aşağıda), soyisim kaynağı @muyesser10'dan bekliyor. Borç: CLAUDE.md §2/§4 güncellemesi (ADR-001). Sprint 3: S3-8 (JWT auth), S3-9 (Grafana/Prometheus), S3-4 (Kuyruk/Pano UX) — bariss9'a atandı.
-* **Sıradaki iş (LLM/DS):** classification prompt + `worker/classification/`. **Veri blokeri var** (aşağıda) — @muyesser10 ile çözülmeden ölçülemez. Ayrıca isim recall eval-bias riski @MehmetTayyip'e iletildi, cevap bekleniyor.
+- **Faz:** Sprint 1 bitti (eval hariç). Sprint 2 aktif — kuyruk backend + onay ekranı + validation + unmask + extraction pipeline hazır.
+- **Aktif sprint:** Sprint 2. (Sprint 1'den sadece eval S1-9 açık — DS merge blokeri.)
+- **Repo durumu:** 6 servis ayakta, uçtan uca akıyor. /ingest → Redis → worker (mask+classify+route+extract+validate) → /claims → /queue → Pano (donut/il barı) çalışıyor.
+- **Son büyük olay:** S2-7 onay kuyruğu ekranı, S1-15 pipeline entegrasyonu, S2-8 Pano istatistikleri ve eval omurgası (S1-9).
+- **Sıradaki iş (BE):** S2-5 masking v2 (5K isim). Borç: CLAUDE.md §2/§4 güncellemesi (ADR-001).
+- **Sıradaki iş (LLM/DS):** classification prompt + `worker/classification/`. **Veri blokeri var** (@muyesser10 ile çözülmeden ölçülemez).
 
 ---
 
 ## HAZIR OLANLAR
 
-* [x] Dizin yapısı (scaffold)
-* [x] `docker-compose.yml` — 6 servis tanımlı (db+redis healthy); worker gerçek pipeline; web bind mount + anonymous node_modules volume (live-reload çalışıyor)
-* [x] `.env.example` + `.env` (lokal)
-* [x] CI (ruff + gitleaks)
-* [x] `CLAUDE.md`, `docs/STATUS.md`, `CODEOWNERS`
-* [x] **`schemas/claim.json`** — damage_type final (8 değer), source_references offset yapılı, status sistem alanı, city/district, ISO tarih, nullable number
-* [x] **Alembic migration** — 6 tablo + external_ref (VECTOR 384); tek head, çakışma yok
-* [x] **SQLAlchemy modelleri** + senkron DB session
-* [x] **`/health`**, **`/ingest`** (external_ref + received_at override), **`/claims`** (status/urgency filtre + sayfalama), **`/claims/{id}`** (detay)
-* [x] **`/queue`** (S2-4) — insan onay kuyruğu: `GET /queue` (urgency sıralı, FIFO), `POST /queue/{id}/approve` → approved, `POST /queue/{id}/reject` → archived; sadece in_human_review geçişi (aksi 409), audit_trail'e from/to yazılıyor — @bariss9
-* [x] Redis client + kuyruk (`claims:incoming`)
-* [x] Pydantic modelleri
-* [x] **Masking v1** (`worker/masking/`) — regex (TC/phone/plate/IBAN) + isim sözlüğü v0 (~42) + `mask_all` pipeline + testler — @bariss9
-* [x] **Masking hata izleme** — `mask_all` başarısızsa `audit_trail`'e `masking_error` step yazılıyor (sessiz fallback kapatıldı) — @bariss9
-* [x] **Masking normalizasyon (S2-5)** — `worker/shared/text_norm.py` `fold_tr_ascii`, accent-insensitive isim eşleştirme. PR #33, review'da (@nursenakyga) — @bariss9
-* [x] **Masking v2 — isim sözlüğü genişletme + ambiguous kural (S2-5 fast-follow)** — `COMMON_NAMES` ~44'ten ~1550'ye çıktı (`data/dictionaries/turkish_names.txt`, Müyesser'in Faker `tr_TR` çıktısı, PR #34 ile main'de). Yeni `AMBIGUOUS_NAMES` (Deniz/Yağmur/Bahar gibi günlük kelimeyle çakışan isimler) sadece (a) soyisimle bitişikse veya (b) bağlam işareti (Sayın X / Ad Soyad: / imza bloğu) yakınındaysa maskeleniyor; aksi halde maskelenmiyor (false-positive önlemi). `SURNAMES` şimdilik **stub/geçici** (Faker'ın küçük last_name kümesi) — @muyesser10'dan resmi kaynak (TÜİK vb.) bekleniyor, gelince genişletilecek. 5 yeni test, tüm eski testler regresyonsuz geçiyor. Branch: `bariss9/s2-5-name-dict-expansion` (push'landı, PR açılacak, **base: `bariss9/s2-5-masking-v2`**, #33 merge olmadan) — @bariss9
-* [x] **Masking v2 — LLM sanity tarama (S2-5 devamı)** — `worker/masking/sanity.py` (yeni): maskeleme sonrası kaçan PII var mı diye küçük bir LLM çağrısı (`worker/llm/client.py`'deki mevcut `LlmClient`/`ModelTier.CHEAP` deseni yeniden kullanıldı). `MASKING_SANITY_ENABLED` env flag'iyle açık/kapalı (varsayılan açık). Sonuç hem `audit_trail`'e hem `Claim.data.masking_sanity_flags`'e yazılıyor (yeni şema alanı). Kaçak bulunursa **extraction atlanıyor** (maliyet + maskelenmemiş PII'yi OpenAI'ye göndermeme, Cagri ile mutabık). LLM çağrısı hata verirse **fail-closed** (kaçak varmış gibi davranır, insana bırakır). 110 test yeşil. Branch: `bariss9/s2-6-masking-sanity` (push'landı). 🔴 **`[SCHEMA]` etiketi + 5 kişi reviewer gerekiyor, PR açık ama standup onayı olmadan merge edilmeyecek** — @bariss9
-* [x] **Unmask** (`worker/masking/unmask.py`) — extraction çıktısındaki placeholder'ları (`[PLATE_1]`) mask_mappings'ten geri açar; saf, recursive (nested dict), format-agnostik; round-trip testli — @bariss9
-* [x] **Validation** (`worker/validation/validator.py`) — extraction çıktısı için 11 deterministik kural (format + yaralanma çapraz kontrol + tutarlılık), flag üretir (reddetmez); 32 test — @bariss9
-* [x] **Ortak yaralanma sözlüğü** (`worker/shared/injury_terms.py`) — classification (pipeline) + validation tek kaynaktan okuyor (12 terim); Türkçe-güvenli `_normalize_tr` (büyük harf I/İ bug'ı düzeltildi, "YARALI" artık yakalanıyor) — @bariss9 (@nursenakyga onaylı)
-* [x] `worker/parser/sentence_splitter` — Türkçe kısaltma/ondalık koruyan bölücü — @muyesser10
-* [x] `data/gt_generator.py` — claim.json uyumlu GT üreteci (İngilizce alanlar, TR PII, yaralanma→kritik) — @muyesser10
-* [x] `data/text_generator.py` — e-posta üreteci (email kanalı), 5 sözlük, JSONL çıktı (emails.jsonl + enriched GT) — @muyesser10
-* [x] `replay/replay.py` — emails.jsonl → /ingest replay (dry-run + gerçek mod, gt_id/received_at eşleme) — @muyesser10
-* [x] `worker/extraction/schema.py` — extraction çıktı sözleşmesi (Pydantic): claim.json alanları + kanıt/güven/eksik alan blokları; claim.json senkron testi — @Cagri12345
-* [x] **worker/main.py gerçek Redis tüketicisi + pipeline (S1-5)** — `claims:incoming`'den BRPOP ile id çekiyor, `masking` → deterministik yaralanma kuralıyla `classification` → `Claim` oluşturup `routing` adımlarını çalıştırıyor, her adımda `audit_trail`'e gerçek satır yazıyor — @nursenakyga
-* [x] `worker/llm/client.py` — OpenAI istemcisi (instructor + Pydantic): iki kademe, seed, zaman aşımı, iki katmanlı retry, denetim izi logu — @Cagri12345. **NOT: extraction ve yeni masking-sanity üzerinden pipeline'a bağlı** —
-classification hâlâ deterministik keyword kuralı, LLM'e bağlı değil.
-* [x] **Canlı LLM doğrulaması + şema optimizasyonu** — gerçek gpt-4o çağrısı yapıldı: `create_with_completion` doğrulandı, `source_references` düz metne çevrildi. Mesaj başına 3 istek → 1, 7.343 → 1.554 token, 14,8 → 8,7 sn — @Cagri12345
-* [x] **`prompts/extraction_v1.txt` + `worker/extraction/extractor.py` (S1-15)** — Türkçe extraction prompt'u (9 kural + 3 few-shot) ve onu LLM istemcisiyle birleştiren modül: her alıntıyı ham metinde bulup `{quote,start,end}` üretiyor, bulunamayan alıntının alanını düşük güvene düşürüyor (halüsinasyon savunması). DB'ye dokunmuyor — pipeline sınırı @nursenakyga ile mutabık. 12 test, hiçbiri ağa çıkmıyor — @Cagri12345
-* [x] **web/ Vite entry point** (S1-13) — @bariss9/@nursenakyga. index.html, vite.config.ts, src/main.tsx
-* [x] **Ham liste ekranı (S1-8)** — @bariss9. Pano'da claims tablosu, urgency'e göre sıralama + kritik/yüksek vurgu, `/api/claims` 3sn polling (`useClaims` hook + `ClaimsTable` component)
-* [x] **Extraction pipeline entegrasyonu (S1-15)** — @nursenakyga. `worker/pipeline.py`'da
-  `step_extract`: masked_text ile `extract()` çağrılıyor, sonuç `unmask_data()`'dan geçirilip
-  `Claim.data.extraction`'a yazılıyor, `audit_trail`'e provider/duration_ms ile loglanıyor.
-  Extraction hatası dead_letter'a düşmüyor — in_human_review'da kalıp `extraction_error`
-  audit adımı düşüyor (aciliyet sıralamasının kaybolmaması için, Çağrı ile mutabık).
-  Gerçek OpenAI çağrısıyla test edildi.
-* [x] **Validation pipeline entegrasyonu** — @nursenakyga. `step_extract` sonrası `step_validate`
-  çalışıyor: Barış'ın 11 kuralı (`worker/validation/validator.py`) extraction çıktısı +
-  claim.urgency/content_type üzerinde koşuyor, sonuç `Claim.data.validation_flags`'a ve
-  `audit_trail`'e yazılıyor. Flag'ler engellemiyor, sadece görünür kılıyor. Gerçek veriyle
-  test edildi (doğru format flag üretmiyor, format hatası doğru yakalanıyor).
-* [x] **S2-8 — Pano sayaç kartları + aciliyet donut + il barı** — @nursenakyga.
-  Backend: `/istatistik/ozet` endpoint'i (`urgency_counts`/`status_counts`/`city_counts`,
-  city verisi `Claim.data.extraction.incident_location.city`'den JSON path ile çekiliyor).
-  Frontend: `useStats.ts` hook + `StatCards`/`UrgencyDonut`/`CityBar` bileşenleri
-  (Recharts), Dashboard.tsx'e entegre. Gerçek veriyle test edildi (kritik/normal
-  ayrımı donut'ta, şehir verisi bar'da doğru görünüyor).
-* [x] **Extraction taban çizgisi ölçümü + prompt ayarı** — 100 kayıt (50/30/20), gpt-4o-mini: zorunlu alan doğruluğu **%99,4**, kanıtsız alan **%3,9** (hedefler ≥%82 / ≤%7). Hasar türü tanımları prompt'a eklendi (`damage_type` %86 → %98), extraction ucuz kademeye alındı (ADR-001 güncellemesi). Ham sonuçlar repo dışında `olcum-arsivi/` — @Cagri12345
-* [x] **`eval/` omurgası (S1-9)** — @Cagri12345. `loader` (iki korpus dosyasını `gt_id` üzerinden birleştirir, deterministik kanal katmanlı örneklem), `normalize` (alan bazında karşılaştırma kuralları; `injury`/`counterparty_exists` için `null`=`false` konvansiyonu tek adreste), `scoring` (kayıt başına isabet, ölçüm arşivinin formatıyla uyumlu), `metrics` (alan doğruluğu + kanıtsız değer oranı + eksik alan tespiti; kanal/alan kırılımı, gürültü tabanı, hata listesi), `runner` (canlı koşu ↔ ücretsiz yeniden puanlama ayrımı), `python -m eval` CLI. 20 kayıtlık arşiv fixture'ıyla regresyon testi (CI kapısı). 68 test, hiçbiri ağa çıkmıyor
+- [x] Dizin yapısı (scaffold)
+- [x] `docker-compose.yml` — 6 servis tanımlı (db+redis healthy); worker gerçek pipeline; web bind mount + anonymous node_modules volume (live-reload çalışıyor)
+- [x] `.env.example` + `.env` (lokal)
+- [x] CI (ruff + gitleaks)
+- [x] `CLAUDE.md`, `docs/STATUS.md`, `CODEOWNERS`
+- [x] **`schemas/claim.json`** — damage_type final (8 değer), source_references offset yapılı, status sistem alanı, city/district, ISO tarih, nullable number
+- [x] **Alembic migration** — 6 tablo + external_ref (VECTOR 384); tek head, çakışma yok
+- [x] **SQLAlchemy modelleri** + senkron DB session
+- [x] **`/health`**, **`/ingest`** (external_ref + received_at override), **`/claims`** (status/urgency filtre + sayfalama), **`/claims/{id}`** (detay)
+- [x] **`/queue`** (S2-4 + S2-7) — insan onay kuyruğu: `GET /queue` (urgency sıralı, FIFO), `POST /queue/{id}/approve` (opsiyonel `edits` ile operatör düzenlemesi + diff audit) → approved, `POST /queue/{id}/reject` → archived; sadece in_human_review geçişi (aksi 409), audit_trail'e from/to + edits diff yazılıyor — @bariss9
+- [x] Redis client + kuyruk (`claims:incoming`)
+- [x] Pydantic modelleri
+- [x] **Masking v1** (`worker/masking/`) — regex (TC/phone/plate/IBAN) + isim sözlüğü v0 (~42) + `mask_all` pipeline + testler — @bariss9
+- [x] **Masking hata izleme** — `mask_all` başarısızsa `audit_trail`'e `masking_error` step yazılıyor (sessiz fallback kapatıldı) — @bariss9
+- [x] **Unmask** (`worker/masking/unmask.py`) — extraction çıktısındaki placeholder'ları (`[PLATE_1]`) mask_mappings'ten geri açar; saf, recursive (nested dict), format-agnostik; round-trip testli — @bariss9
+- [x] **Validation** (`worker/validation/validator.py`) — extraction çıktısı için 11 deterministik kural (format + yaralanma çapraz kontrol + tutarlılık), flag üretir (reddetmez); 32 test — @bariss9
+- [x] **Ortak yaralanma sözlüğü** (`worker/shared/injury_terms.py`) — classification (pipeline) + validation tek kaynaktan okuyor (12 terim); Türkçe-güvenli `_normalize_tr` (büyük harf I/İ bug'ı düzeltildi, "YARALI" artık yakalanıyor) — @bariss9 (@nursenakyga onaylı)
+- [x] **Onay kuyruğu ekranı (S2-7)** — @bariss9. Kuyruk sayfası: sol liste (ClaimsTable, tıklanabilir + seçili vurgu) + sağ detay paneli (`QueueDetail`). Düzenlenebilir extraction alanları (10 alan, null/false ayrımı korunuyor), validation_flags gösterimi (ilgili alanın altında), masked_text salt okunur. Onayla → değişen alanlar `edits` olarak gönderiliyor (diff audit'e); Reddet iki adımlı. `useQueue` hook (3sn polling) + `useApproveClaim`/`useRejectClaim` (ekipte ilk useMutation, invalidateQueries ile tazeleme). Gerçek veriyle test edildi (düzenle→onayla→diff audit zinciri doğrulandı).
+- [x] `worker/parser/sentence_splitter` — Türkçe kısaltma/ondalık koruyan bölücü — @muyesser10
+- [x] `data/gt_generator.py` — claim.json uyumlu GT üreteci (İngilizce alanlar, TR PII, yaralanma→kritik) — @muyesser10
+- [x] `data/text_generator.py` — e-posta üreteci (email kanalı), 5 sözlük, JSONL çıktı (emails.jsonl + enriched GT) — @muyesser10
+- [x] `replay/replay.py` — emails.jsonl → /ingest replay (dry-run + gerçek mod, gt_id/received_at eşleme) — @muyesser10
+- [x] `worker/extraction/schema.py` — extraction çıktı sözleşmesi (Pydantic): claim.json alanları + kanıt/güven/eksik alan blokları; claim.json senkron testi — @Cagri12345
+- [x] **worker/main.py gerçek Redis tüketicisi + pipeline (S1-5)** — `claims:incoming`'den BRPOP ile id çekiyor, `masking` → deterministik yaralanma kuralıyla `classification` → `Claim` oluşturup `routing` adımlarını çalıştırıyor, her adımda `audit_trail`'e gerçek satır yazıyor — @nursenakyga
+- [x] `worker/llm/client.py` — OpenAI istemcisi (instructor + Pydantic): iki kademe, seed, zaman aşımı, iki katmanlı retry, denetim izi logu — @Cagri12345. **NOT: extraction üzerinden pipeline'a bağlı** (`worker/extraction/extractor.py` bunu kullanıyor) — classification hâlâ deterministik keyword kuralı, LLM'e bağlı değil.
+- [x] **Canlı LLM doğrulaması + şema optimizasyonu** — gerçek gpt-4o çağrısı yapıldı: `create_with_completion` doğrulandı, `source_references` düz metne çevrildi. Mesaj başına 3 istek → 1, 7.343 → 1.554 token, 14,8 → 8,7 sn — @Cagri12345
+- [x] **`prompts/extraction_v1.txt` + `worker/extraction/extractor.py` (S1-15)** — Türkçe extraction prompt'u (9 kural + 3 few-shot) ve onu LLM istemcisiyle birleştiren modül: her alıntıyı ham metinde bulup `{quote,start,end}` üretiyor, bulunamayan alıntının alanını düşük güvene düşürüyor (halüsinasyon savunması). DB'ye dokunmuyor — pipeline sınırı @nursenakyga ile mutabık. 12 test, hiçbiri ağa çıkmıyor — @Cagri12345
+- [x] **web/ Vite entry point** (S1-13) — @bariss9/@nursenakyga. index.html, vite.config.ts, src/main.tsx
+- [x] **Ham liste ekranı (S1-8)** — @bariss9. Pano'da claims tablosu, urgency'e göre sıralama + kritik/yüksek vurgu, `/api/claims` 3sn polling (`useClaims` hook + `ClaimsTable` component)
+- [x] **Extraction pipeline entegrasyonu (S1-15)** — @nursenakyga. `worker/pipeline.py`'da `step_extract`: masked_text ile `extract()` çağrılıyor, sonuç `unmask_data()`'dan geçirilip `Claim.data.extraction`'a yazılıyor, `audit_trail`'e provider/duration_ms ile loglanıyor. Extraction hatası dead_letter'a düşmüyor — in_human_review'da kalıp `extraction_error` audit adımı düşüyor (aciliyet sıralamasının kaybolmaması için, Çağrı ile mutabık). Gerçek OpenAI çağrısıyla test edildi.
+- [x] **Validation pipeline entegrasyonu** — @nursenakyga. `step_extract` sonrası `step_validate` çalışıyor: Barış'ın 11 kuralı (`worker/validation/validator.py`) extraction çıktısı + claim.urgency/content_type üzerinde koşuyor, sonuç `Claim.data.validation_flags`'a ve `audit_trail`'e yazılıyor. Flag'ler engellemiyor, sadece görünür kılıyor. Gerçek veriyle test edildi (doğru format flag üretmiyor, format hatası doğru yakalanıyor).
+- [x] **S2-8 — Pano sayaç kartları + aciliyet donut + il barı** — @nursenakyga. Backend: `/istatistik/ozet` endpoint'i (`urgency_counts`/`status_counts`/`city_counts`, city verisi `Claim.data.extraction.incident_location.city`'den JSON path ile çekiliyor). Frontend: `useStats.ts` hook + `StatCards`/`UrgencyDonut`/`CityBar` bileşenleri (Recharts), Dashboard.tsx'e entegre. Gerçek veriyle test edildi (kritik/normal ayrımı donut'ta, şehir verisi bar'da doğru görünüyor).
+- [x] **Extraction taban çizgisi ölçümü + prompt ayarı** — 100 kayıt (50/30/20), gpt-4o-mini: zorunlu alan doğruluğu **%99,4**, kanıtsız alan **%3,9** (hedefler ≥%82 / ≤%7). Hasar türü tanımları prompt'a eklendi (`damage_type` %86 → %98), extraction ucuz kademeye alındı (ADR-001 güncellemesi). Ham sonuçlar repo dışında `olcum-arsivi/` — @Cagri12345
+- [x] **`eval/` omurgası (S1-9)** — @Cagri12345. `loader` (iki korpus dosyasını `gt_id` üzerinden birleştirir, deterministik kanal katmanlı örneklem), `normalize` (alan bazında karşılaştırma kuralları; `injury`/`counterparty_exists` için `null`=`false` konvansiyonu tek adreste), `scoring` (kayıt başına isabet, ölçüm arşivinin formatıyla uyumlu), `metrics` (alan doğruluğu + kanıtsız değer oranı + eksik alan tespiti; kanal/alan kırılımı, gürültü tabanı, hata listesi), `runner` (canlı koşu ↔ ücretsiz yeniden puanlama ayrımı), `python -m eval` CLI. 20 kayıtlık arşiv fixture'ıyla regresyon testi (CI kapısı). 68 test, hiçbiri ağa çıkmıyor
 
 ## HENÜZ YAPILMADI
 
-* [ ] **Onay kuyruğu ekranı (S2-7)** — @bariss9. Backend (/queue) hazır; PR #32 review'da.
-* [ ] **Masking v2 (S2-5) — iki PR'ın merge'i** — @bariss9. Kod bitti (yukarı bak), `s2-5-name-dict-expansion` normal review bekliyor, `s2-6-masking-sanity` standup onayı ([SCHEMA]) bekliyor.
-* [ ] **Soyisim listesi resmi kaynağı** — @muyesser10. Şu an stub (Faker'ın küçük last_name kümesi). TÜİK veya benzeri temiz kaynak araştırılıyor.
-* [ ] **classification (prompt + `worker/classification/`)** — @Cagri12345. İçerik tipi + aciliyet, erken çıkış (claim değilse extraction çalışmaz), yaralanma→kritik deterministik override. `worker/pipeline.py`'daki `step_classify` şu an sadece keyword kuralı. **Veri blokeri var** — aşağıya bak.
-* [ ] **eval/ kalan metrikler** — @Cagri12345. Omurga hazır (yukarı bak). Eksik: içerik tipi / triyaj doğruluğu + kritik recall (**veri blokerinde**), serbest metin cosine skorlaması (embedding modeline bağlı, Sprint 3), RAG eval seti (40 soru, Sprint 3), pano analitiği hesapları (tasarım §8). Ayrıca isim recall'ı için **holdout (Faker-dışı) isim seti** hâlâ hazır değil (@muyesser10 araştırıyor) — hazır olana kadar isim recall %97 hedefi gerçekçi ölçülemez, PII tipine göre kırılım (regex vs isim ayrı) önerildi, @MehmetTayyip'e iletildi.
-* [ ] **Çalışan fallback katmanı** — OpenAI birincil, Groq/Gemini/Ollama config'i duruyor ama kod yok (ADR-001 açık maddesi, @bariss9 + @nursenakyga).
-* [ ] **source_references offset + kaynak cümle vurgulama (S2-12)** — @nursenakyga. Extraction pipeline'a bağlanınca; `text.find(quote)` offset + ekran vurgusu.
-* [ ] **CLAUDE.md §2/§4 güncellemesi** — hâlâ eski üçlü router'ı anlatıyor; ADR-001'e göre güncellenmeli — @bariss9
-* [ ] `schemas/claim.json` nihai "dondu" işareti (masking_sanity_flags eklenince tekrar gözden geçirilecek)
+- [ ] **Onay kuyruğu ekranı (S2-7)** — @bariss9. Backend (/queue) hazır; sırada ekran (liste + onayla/reddet + operatör düzenleme/diff).
+- [ ] **Masking v2 (S2-5)** — @bariss9. 5K isim sözlüğü + Türkçe normalizasyon + LLM sanity (LLM kısmı extraction'a bağımlı; artık teknik olarak mümkün).
+- [ ] **classification (prompt + `worker/classification/`)** — @Cagri12345. İçerik tipi + aciliyet, erken çıkış (claim değilse extraction çalışmaz), yaralanma→kritik deterministik override. `worker/pipeline.py`'daki `step_classify` şu an sadece keyword kuralı. **Veri blokeri var** — aşağıya bak.
+- [ ] **eval/ kalan metrikler** — @Cagri12345. Omurga hazır (yukarı bak). Eksik: içerik tipi / triyaj doğruluğu + kritik recall (**veri blokerinde**), serbest metin cosine skorlaması (embedding modeline bağlı, Sprint 3), RAG eval seti (40 soru, Sprint 3), pano analitiği hesapları (tasarım §8).
+- [ ] **`worker/masking/llm_sanity.py`** — @Cagri12345. CODEOWNERS'ta ayrılmış, dosya yok. S2-5 masking v2'nin LLM ayağı.
+- [ ] **Çalışan fallback katmanı** — OpenAI birincil, Groq/Gemini/Ollama config'i duruyor ama kod yok (ADR-001 açık maddesi, @bariss9 + @nursenakyga).
+- [ ] **source_references offset + kaynak cümle vurgulama (S2-12)** — @nursenakyga. Offset backend'de zaten çözülüyor (`{quote,start,end}`); kalan iş sadece ekranda vurgulama.
+- [ ] **CLAUDE.md §2/§4 güncellemesi** — hâlâ eski üçlü router'ı anlatıyor; ADR-001'e göre güncellenmeli — @bariss9
+- [ ] `schemas/claim.json` nihai "dondu" işareti
 
 ---
 
@@ -107,14 +90,14 @@ classification hâlâ deterministik keyword kuralı, LLM'e bağlı değil.
 * [ ] Sprint 1 demo
 
 ### Sprint 2 — Kuyruk + Pano Tam + Masking v2  —  DURUM: aktif
-* [x] S2-DE-1 — counterparty_exists artık damage_type'a bağlı — @muyesser10
-* [x] **S2-3 — Validation kuralları (11 kural) + ortak yaralanma sözlüğü** — @bariss9
-* [x] **S2-4 — Kuyruk backend (onayla/reddet + audit)** — @bariss9
-* [~] S2-5 Masking v2 — @bariss9. Normalizasyon PR #33 review'da; isim sözlüğü genişletme + ambiguous kural + LLM sanity kod tarafı bitti, 2 PR merge bekliyor (biri standup onayı istiyor); soyisim resmi kaynağı hâlâ açık (@muyesser10).
-* [ ] S2-7 Onay kuyruğu ekranı — @bariss9 (PR #32, review'da)
-* [x] S2-8 Pano sayaç/donut/il barı — @nursenakyga
-* [ ] S2-12 Kaynak cümle vurgulama — @nursenakyga
-* **Dağılım:** bariss9 → S2-4/S2-7/S2-5, nursena → S2-8/S2-12 (mutabık)
+- [x] S2-DE-1 — counterparty_exists artık damage_type'a bağlı — @muyesser10
+- [x] **S2-3 — Validation kuralları (11 kural) + ortak yaralanma sözlüğü** — @bariss9
+- [x] **S2-4 — Kuyruk backend (onayla/reddet + audit + edit/diff)** — @bariss9
+- [ ] S2-5 Masking v2 — @bariss9
+- [x] **S2-7 — Onay kuyruğu ekranı (düzenle + onayla/reddet + diff)** — @bariss9
+- [x] S2-8 Pano sayaç/donut/il barı — @nursenakyga
+- [ ] S2-12 Kaynak cümle vurgulama — @nursenakyga
+- **Dağılım:** bariss9 → S2-4/S2-7/S2-5, nursena → S2-8/S2-12 (mutabık)
 
 ### Sprint 3 — Auth + RAG + Observability  —  DURUM: başlamadı
 * **bariss9'a atanan:** S3-8 (JWT auth + operatör/admin rolleri), S3-9 (Grafana+Prometheus temel panolar, DS ile ortak), S3-4 (Pano/Kuyruk UX — 🔴 hangi ekran olduğu netleşmeli, standup'ta konuşulacak).
@@ -129,54 +112,49 @@ classification hâlâ deterministik keyword kuralı, LLM'e bağlı değil.
 
 | Bekleyen | Beklenen şey | Kimden | Durum |
 |----------|--------------|--------|-------|
-| S2-12 (ekran vurgusu) | — | @nursenakyga | Bağımlılık çözüldü (extraction pipeline'da); kalan iş sadece ekranda vurgulama, backend tarafı hazır |
+| S2-12 (ekran vurgusu) | — | @nursenakyga | Bağımlılık çözüldü (extraction pipeline'da, offset hazır); kalan iş sadece ekranda vurgulama, backend tarafı hazır |
 | **classification (LLM)** | **GT'de `content_type` ve `urgency` etiketlerinin metne yansıtılarak üretilmesi** | **@muyesser10** | **BLOKER — etiketler rastgele atanıyor, metinle ilgisi yok. Detay aşağıda.** |
-| DS branch (feature/ds-analiz-kurulum) | Branch'in akıbeti | @MehmetTayyip | `eval/` sıfırdan, İngilizce alan adlarıyla yeniden yazıldı (rol birleşmesi sonrası @Cagri12345'e geçti). Branch'in eval kısmı geçersiz kaldı; ayrıca çok eski bir main'den ayrılmış (o ağaçta `api/main.py` ve `worker/` yok). Saklanacak bir şey var mı standup'ta bakılacak. |
-| **S2-5 — soyisim resmi kaynağı** | TÜİK veya benzeri temiz (MIT/CC0) soyisim listesi | @muyesser10 | Faker'da sadece 60 soyisim var, yetersiz. Şu an stub. Araştırma sürüyor. |
-| **S2-5 — turkish_names.txt amacı teyidi** | PR #34'teki dosyanın masking-sözlüğü kaynağı mı yoksa holdout mu olduğu | @muyesser10 | Faker ile tam örtüştüğü tespit edildi; PR başlığına göre muhtemelen sözlük kaynağı (holdout ayrı, hâlâ bekleniyor), teyit mesajı gönderildi, cevap yok |
-| **Eval — isim recall'i eval-bias riski** | gt_generator + masking sözlüğünün aynı Faker havuzunu kullanmaması | @MehmetTayyip | İletildi (gt_generator aynı listeden sentetik isim üretiyor, sözlük de aynı olursa recall yapay ~%100 çıkar), cevap bekleniyor |
-| **`masking_sanity_flags` şema onayı** | `[SCHEMA]` etiketli PR'ın standup'ta 5 kişi onayı | Tüm ekip | PR (`bariss9/s2-6-masking-sanity`) açık, merge edilmeden önce onay şart |
+| DS branch (feature/ds-analiz-kurulum) | Branch'in akıbeti | @MehmetTayyip | `eval/` sıfırdan, İngilizce alan adlarıyla yeniden yazıldı. Branch'in eval kısmı (ve eski Türkçe alan adı uyuşmazlığı) geçersiz kaldı; ayrıca çok eski bir main'den ayrılmış. Saklanacak bir şey var mı standup'ta bakılacak. |
 
 ---
 
 ## BİLİNEN SORUNLAR / RİSKLER
 
-* **BLOKER — classification verisi yok, etiketler metinle ilgisiz.** `data/gt_generator.py:139` `content_type`'ı ağırlıklı zarla seçiyor ve `data/text_generator.py` bu alanı hiç okumuyor (grep: 0 eşleşme) — üretilen metin her zaman ihbar metni. Örnek: GT-000003 `irrelevant` etiketli ama kusursuz bir hasar bildirimi; GT-000007 `info_request` etiketli ama ihbar transkripti. Aciliyette de aynı durum ve iş kuralı ters kurulmuş (`gt_generator.py:144-147`: önce `urgency` çekiliyor, `injury` ondan türüyor; CLAUDE.md §2 ve tasarım §4 tersini söylüyor — yaralanma → kritik). 78 kritik kaydın 21'inde yaralanma yok ve metinde aciliyeti gösteren hiçbir şey yok. **Sonuç:** tasarım §6.2'nin 2, 3 ve 5 numaralı metrikleri (içerik tipi, triyaj, kritik recall) ölçülemiyor; CLAUDE.md §7'deki macro-F1 ≥%85 ve kritik recall ≥%97 hedefleri doğrulanamaz. Ölçülebilen tek şey: 57 `injury=true` kaydın hepsi `urgency=critical`, yani deterministik override test edilebiliyor. @muyesser10 aynı üreteç değişikliğinde (isimlerle birlikte) düzeltmeyi planlıyor — bitince Cagri baseline'ı yeniden ölçecek.
-* **Veri kontratı ile gerçek dosyalar ayrışmış.** `IhbarKokpiti-Veri-Kontrati.md §2.2` `meta` (profile/difficulty/length), `labels` (corruption_type, injected_missing_fields) ve `masking_ground_truth` bloklarını söz veriyor; `ground_truth_enriched.jsonl`'da üçü de yok. Kaybedilenler: uzunluk/zorluk kırılımı analizi (tasarım §5.3) ve maskeleme recall'ı ölçümü (§7 hedefi %97). Ayrıca `received_at` cevap anahtarı dosyasında duruyor (kontrat `inputs.jsonl`'a koyuyor); eval yükleyicisi oradan okumak zorunda — `eval/loader.py` docstring'inde işaretli.
-* **Prompt yer tutucuları maskelemenin ürettikleriyle uyuşmuyor.** `prompts/extraction_v1.txt:57` ve Örnek 3 `[PLAKA_1] / [TELEFON_1] / [AD_1]` diyor; `worker/masking/regex_rules.py:7-9` ve `name_dict.py:66` `[PLATE_1] / [PHONE_1] / [NAME_1]` üretiyor. Pipeline artık extraction'a maskeli metin veriyor (S1-15), ama taban çizgisi **ham metinle** ölçüldü — bu yol hiç ölçülmedi. Ucuz düzeltme — @Cagri12345.
-* **Extraction taban çizgisi ölçüldü (100 kayıt, gpt-4o-mini, 3 few-shot):** zorunlu alan doğruluğu **%99,4**, kanıtsız alan oranı **%3,9**. CLAUDE.md §7 hedefleri (≥%82, ≤%7) karşılandı. Kanal bazında e-posta %99,2 / transkript %99,6 / form %99,4. Koşu maliyeti ~$0,05. **NOT: isim/üreteç değişikliği sonrası bu ölçüm geçersiz olacak, yeniden ölçülmesi gerekiyor** (@Cagri12345 iletti).
-* **Extraction artık `gpt-4o-mini` kullanıyor — ADR-001 güncellendi.** 8 kayıtta 4o ile eşit çıkmıştı, 100 kayıtta %99,4 yaptı; güçlü kademeye gerek olmadığı ölçümle görüldü. Text-to-SQL ve RAG hâlâ güçlü kademede, onlar ölçülmedi.
-* Ölçüm gürültüsü: `temperature=0` ve sabit `seed`'e rağmen aynı koşu 800 alanda ±1 alan oynuyor (±%0,13). %0,5'ten küçük farklar anlamlı sayılmamalı.
-* Kalan 5 hatanın 3'ü veri kaynaklı: `collision` kayıtlarının 53'ünde (139'un %38'i) `counterparty_exists=False` — çarpışacak kimse olmadan çarpışma. Ayrıca 3 `collision` kaydında metinde olayın nasıl olduğu hiç yazmıyor. @muyesser10'a iletildi.
-* 3 few-shot örneği yerine 1 örnek aynı doğruluğu verdi ama `damage_type`'ı 22 kez kanıtsız doldurdu (3'e karşı) — tahmin ederek tutturuyordu. 3 örnek kaldı; önbellekleme sayesinde süre farkı da yok.
-* **Veri sürümü:** `text_generator.py`'deki her değişiklik 1000 kaydın neredeyse hepsini değiştiriyor (PR #25'te 991/1000). Taban çizgisi ölçüldükten sonra veri dondurulmalı, yoksa haftalık metrikler kıyaslanamaz — @muyesser10'a iletildi. Şu an zaten isim+classification düzeltmeleri için bir kez daha yeniden üretim planlanıyor, ikisi birlikte yapılacak (Cagri'nin talebi).
-* **DS branch (feature/ds-analiz-kurulum) merge blokeri:** (1) Türkçe alan adları (dil kararı İngilizceydi), (2) eval/ → analiz/ yeniden adlandırılmış (CLAUDE.md dizin sahipliğine aykırı), (3) pandas/scikit-learn requirements'ta yok (CI patlar). Merge öncesi standup.
-* **CLAUDE.md §2/§4 güncel değil:** ADR-001 üçlü router yerine OpenAI'ye geçti ama CLAUDE.md hâlâ eskiyi anlatıyor. Yanlış yönlendirme riski. @bariss9 güncelleyecek.
-* worker `depends_on` `service_started` (api'deki `service_healthy` değil); DB hazır olmadan bağlanma riski — @nursenakyga.
-* `.env.example` `postgresql://` ile başlıyor; kod `+psycopg`'ye çeviriyor. İleride düzeltme ekiple konuşulacak.
-* Yerel Postgres çakışması (bariss9): db override ile 5433'te (kişisel).
-* **isim sözlüğü genişletildi (S2-5 fast-follow), soyisim tarafı hâlâ stub** — @muyesser10'dan resmi kaynak bekleniyor.
-* **`policy_no` formatı:** validation'daki `POL-YYYY-NNNNN` deseni sentetik (gt_generator'dan). @muyesser10 teyit etti: gerçek format değil, sadece test verisi kalıbı. Validation bu yüzden flag'liyor, reddetmiyor — gerçek veri farklı formatta gelirse kırılmaz.
-* OpenAI maliyeti ölçüldü: extraction mesaj başına ~3.900 girdi + ~330 çıktı token, ~3,9 sn (gpt-4o-mini, tek istek). 100 kayıtlık koşu ~$0,05; 1000 kayıtlık tam koşu birkaç kuruş. Sistem prompt'u her çağrıda aynı olduğu için OpenAI'nin önbelleği devrede (`cached_tokens` çıktıda görünüyor). `DEMO_OFFLINE` için yerel model yok, kayıtlı fixture gerekiyor (Sprint 4) — kod hâlâ hiçbir yerde okumuyor (masking sanity da ayrı, kendi `MASKING_SANITY_ENABLED` flag'ini kullanıyor). Çalışan fallback katmanı henüz yazılmadı, sadece anahtarlar duruyor. Bkz. ADR-001.
-* `data/dictionaries/opening_templates.txt` 12. satırda "dün" sabit yazılı ve gövdedeki gerçek tarihle çelişiyor — 46 mailin 5'i (GT-000001/3/57/76/99). `make_date_phrase` doğru çalışıyor, sorun yalnız bu şablonda. @muyesser10'a iletildi.
-* `injury` / `counterparty_exists`: metin sessizse GT `false`, extraction sözleşmesi `null` diyor. Eval normalizasyonunda `null` = `false` eşlenecek; şema değişmiyor (bilgi kaybı olmasın).
+- **Worker/api image bayatlaması:** extraction/validation gibi yeni worker kodu (veya api değişiklikleri) `docker compose up -d` ile OTOMATİK gelmiyor — image yeniden build edilmeli (`docker compose up -d --build worker`). Aksi halde container eski kodu çalıştırır (örn. extraction hiç çağrılmaz). Web'de bind mount var, worker/api'de yok.
+- **Extraction OpenAI anahtarına bağlı:** `OPENAI_API_KEY` `.env`'de yoksa extraction hata verir, `audit_trail`'e `extraction_error` düşer, claim `in_human_review`'da kalır (data'da extraction bloğu olmaz). Bu doğru davranış (aciliyet kaybolmuyor) ama lokal test için anahtar gerekir; anahtarsız test için data elle enjekte edilebilir.
+- **BLOKER — classification verisi yok, etiketler metinle ilgisiz.** `data/gt_generator.py:139` `content_type`'ı ağırlıklı zarla seçiyor ve `data/text_generator.py` bu alanı hiç okumuyor (grep: 0 eşleşme) — üretilen metin her zaman ihbar metni. Örnek: GT-000003 `irrelevant` etiketli ama kusursuz bir hasar bildirimi; GT-000007 `info_request` etiketli ama ihbar transkripti. Aciliyette de aynı durum ve iş kuralı ters kurulmuş (`gt_generator.py:144-147`: önce `urgency` çekiliyor, `injury` ondan türüyor; CLAUDE.md §2 ve tasarım §4 tersini söylüyor — yaralanma → kritik). 78 kritik kaydın 21'inde yaralanma yok ve metinde aciliyeti gösteren hiçbir şey yok. **Sonuç:** tasarım §6.2'nin 2, 3 ve 5 numaralı metrikleri (içerik tipi, triyaj, kritik recall) ölçülemiyor; CLAUDE.md §7'deki macro-F1 ≥%85 ve kritik recall ≥%97 hedefleri doğrulanamaz. Ölçülebilen tek şey: 57 `injury=true` kaydın hepsi `urgency=critical`, yani deterministik override test edilebiliyor. @muyesser10'a iletilecek — classification'dan önce çözülmeli.
+- **Veri kontratı ile gerçek dosyalar ayrışmış.** `IhbarKokpiti-Veri-Kontrati.md §2.2` `meta` (profile/difficulty/length), `labels` (corruption_type, injected_missing_fields) ve `masking_ground_truth` bloklarını söz veriyor; `ground_truth_enriched.jsonl`'da üçü de yok. Kaybedilenler: uzunluk/zorluk kırılımı analizi (tasarım §5.3) ve maskeleme recall'ı ölçümü (§7 hedefi %97). Ayrıca `received_at` cevap anahtarı dosyasında duruyor (kontrat `inputs.jsonl`'a koyuyor); eval yükleyicisi oradan okumak zorunda — `eval/loader.py` docstring'inde işaretli.
+- **Prompt yer tutucuları maskelemenin ürettikleriyle uyuşmuyor.** `prompts/extraction_v1.txt:57` ve Örnek 3 `[PLAKA_1] / [TELEFON_1] / [AD_1]` diyor; `worker/masking/regex_rules.py:7-9` ve `name_dict.py:66` `[PLATE_1] / [PHONE_1] / [NAME_1]` üretiyor. Pipeline artık extraction'a maskeli metin veriyor (S1-15), ama taban çizgisi **ham metinle** ölçüldü — bu yol hiç ölçülmedi. Ucuz düzeltme — @Cagri12345.
+- **Extraction taban çizgisi ölçüldü (100 kayıt, gpt-4o-mini, 3 few-shot):** zorunlu alan doğruluğu **%99,4**, kanıtsız alan oranı **%3,9**. CLAUDE.md §7 hedefleri (≥%82, ≤%7) karşılandı. Kanal bazında e-posta %99,2 / transkript %99,6 / form %99,4. Koşu maliyeti ~$0,05.
+- **Extraction artık `gpt-4o-mini` kullanıyor — ADR-001 güncellendi.** 8 kayıtta 4o ile eşit çıkmıştı, 100 kayıtta %99,4 yaptı; güçlü kademeye gerek olmadığı ölçümle görüldü. Text-to-SQL ve RAG hâlâ güçlü kademede, onlar ölçülmedi.
+- Ölçüm gürültüsü: `temperature=0` ve sabit `seed`'e rağmen aynı koşu 800 alanda ±1 alan oynuyor (±%0,13). %0,5'ten küçük farklar anlamlı sayılmamalı.
+- Kalan 5 hatanın 3'ü veri kaynaklı: `collision` kayıtlarının 53'ünde (139'un %38'i) `counterparty_exists=False` — çarpışacak kimse olmadan çarpışma. Ayrıca 3 `collision` kaydında metinde olayın nasıl olduğu hiç yazmıyor. @muyesser10'a iletildi.
+- 3 few-shot örneği yerine 1 örnek aynı doğruluğu verdi ama `damage_type`'ı 22 kez kanıtsız doldurdu (3'e karşı) — tahmin ederek tutturuyordu. 3 örnek kaldı; önbellekleme sayesinde süre farkı da yok.
+- **Veri sürümü:** `text_generator.py`'deki her değişiklik 1000 kaydın neredeyse hepsini değiştiriyor (PR #25'te 991/1000). Taban çizgisi ölçüldükten sonra veri dondurulmalı, yoksa haftalık metrikler kıyaslanamaz — @muyesser10'a iletildi.
+- **DS branch (feature/ds-analiz-kurulum) merge blokeri:** (1) Türkçe alan adları (dil kararı İngilizceydi), (2) eval/ → analiz/ yeniden adlandırılmış (CLAUDE.md dizin sahipliğine aykırı), (3) pandas/scikit-learn requirements'ta yok (CI patlar). Merge öncesi standup.
+- **CLAUDE.md §2/§4 güncel değil:** ADR-001 üçlü router yerine OpenAI'ye geçti ama CLAUDE.md hâlâ eskiyi anlatıyor. Yanlış yönlendirme riski. @bariss9 güncelleyecek.
+- worker `depends_on` `service_started` (api'deki `service_healthy` değil); DB hazır olmadan bağlanma riski — @nursenakyga.
+- `.env.example` `postgresql://` ile başlıyor; kod `+psycopg`'ye çeviriyor. İleride düzeltme ekiple konuşulacak.
+- Yerel Postgres çakışması (bariss9): db override ile 5433'te (kişisel).
+- isim sözlüğü v0 Türkçe karaktersiz; "Hüseyin" eşleşmez — Sprint 2 (S2-5).
+- **`policy_no` formatı:** validation'daki `POL-YYYY-NNNNN` deseni sentetik (gt_generator'dan). @muyesser10 teyit etti: gerçek format değil, sadece test verisi kalıbı. Validation bu yüzden flag'liyor, reddetmiyor — gerçek veri farklı formatta gelirse kırılmaz.
+- OpenAI maliyeti ölçüldü: extraction mesaj başına ~3.900 girdi + ~330 çıktı token, ~3,9 sn (gpt-4o-mini, tek istek). 100 kayıtlık koşu ~$0,05; 1000 kayıtlık tam koşu birkaç kuruş. Sistem prompt'u her çağrıda aynı olduğu için OpenAI'nin önbelleği devrede (`cached_tokens` çıktıda görünüyor). `DEMO_OFFLINE` için yerel model yok, kayıtlı fixture gerekiyor (Sprint 4). Çalışan fallback katmanı henüz yazılmadı, sadece anahtarlar duruyor. Bkz. ADR-001.
+- `data/dictionaries/opening_templates.txt` 12. satırda "dün" sabit yazılı ve gövdedeki gerçek tarihle çelişiyor — 46 mailin 5'i (GT-000001/3/57/76/99). `make_date_phrase` doğru çalışıyor, sorun yalnız bu şablonda. @muyesser10'a iletildi.
+- `injury` / `counterparty_exists`: metin sessizse GT `false`, extraction sözleşmesi `null` diyor. Eval normalizasyonunda `null` = `false` eşlenecek; şema değişmiyor (bilgi kaybı olmasın).
 
 ---
 
 ## KARAR GEÇMİŞİ (kısa)
 
-* İsimler İngilizce (endpoint/kod/dosya/**alan adları**); yorumlar İngilizce; prompt Türkçe; config ASCII.
-* claim.json: damage_type 8 değer; source_references offset'li {quote,start,end}; status sistem alanı; city/district; estimated_amount nullable number; incident_date ISO.
-* external_ref: GT eşleştirme için ingest'e opsiyonel alan. received_at override: GT'de sabit zaman.
-* Masking: regex önce, isim sözlüğü sonra; plaka 1-3 harf; v0 sözlük ~42 isim → S2-5'te ~1550'ye çıktı. Hata olursa audit_trail'e masking_error yazılıyor.
-* **Ambiguous isim kuralı (S2-5):** günlük kelimeyle çakışan isimler (Deniz, Yağmur vb.) sadece soyisimle bitişikse VEYA bağlam işareti (Sayın/Ad Soyad/imza) yakınındaysa maskelenir; aksi halde maskelenmez. Soyisim listesi şu an stub, resmi kaynak bekleniyor.
-* **LLM masking sanity (S2-5):** masking sonrası küçük bir LLM çağrısı kaçan PII kontrolü yapar; sonuç hem audit_trail hem `Claim.data.masking_sanity_flags`'e (yeni şema alanı, [SCHEMA] onayı bekliyor) yazılır. Kaçak bulunursa extraction atlanır (maliyet + PII'yi 3. tarafa göndermeme). LLM hatasında fail-closed (kaçak varmış gibi davranır).
-* **İsim kaynağı governance kuralı (Cagri ile mutabık):** eval için ayrılacak "holdout" (Faker-dışı) isimler asla masking sözlüğüne girmemeli — aksi halde recall ölçümü dairesel olur.
-* Yaralanma sözlüğü tek kaynak (`worker/shared/injury_terms.py`), classification + validation ortak kullanıyor; Türkçe-güvenli karşılaştırma (`_normalize_tr`).
-* Durum makinesi onay/ret: in_human_review → approved (onayla) | archived (reddet); geçiş dışı istek 409.
-* extraction `source_references`: LLM'den düz alıntı metni (`dict[str, str]`). `{quote,start,end}` nihai kayıt şekli olarak `claim.json`'da kalıyor, offset'i pipeline hesaplar. Ölçüm: sarmalayıcı nesne mesaj başına 2 fazla LLM çağrısına yol açıyordu.
-* LLM sağlayıcı: OpenAI iki kademe (gpt-4o-mini / gpt-4o) — ADR-001. Eski sağlayıcı anahtarları `.env.example`'da fallback başlığı altında duruyor, kod okumuyor. **Embedding yerel 384 (değişmedi).** SQLAlchemy senkron (psycopg3); Python 3.11.
-* web servisi: bind mount + anonymous node_modules volume ile live-reload (S1-8 sırasında eklendi).
+- İsimler İngilizce (endpoint/kod/dosya/**alan adları**); yorumlar İngilizce; prompt Türkçe; config ASCII.
+- claim.json: damage_type 8 değer; source_references offset'li {quote,start,end}; status sistem alanı; city/district; estimated_amount nullable number; incident_date ISO.
+- external_ref: GT eşleştirme için ingest'e opsiyonel alan. received_at override: GT'de sabit zaman.
+- Masking: regex önce, isim sözlüğü sonra; plaka 1-3 harf; v0 sözlük ~42 isim. Hata olursa audit_trail'e masking_error yazılıyor.
+- Yaralanma sözlüğü tek kaynak (`worker/shared/injury_terms.py`), classification + validation ortak kullanıyor; Türkçe-güvenli karşılaştırma (`_normalize_tr`).
+- Durum makinesi onay/ret: in_human_review → approved (onayla) | archived (reddet); geçiş dışı istek 409. Onayla opsiyonel `edits` alır; değişen alanlar audit_trail'e diff olarak yazılır.
+- extraction `source_references`: LLM'den düz alıntı metni (`dict[str, str]`). `{quote,start,end}` nihai kayıt şekli olarak `claim.json`'da kalıyor, offset'i pipeline hesaplar. Ölçüm: sarmalayıcı nesne mesaj başına 2 fazla LLM çağrısına yol açıyordu.
+- LLM sağlayıcı: OpenAI iki kademe (gpt-4o-mini / gpt-4o) — ADR-001. Eski sağlayıcı anahtarları `.env.example`'da fallback başlığı altında duruyor, kod okumuyor. **Embedding yerel 384 (değişmedi).** SQLAlchemy senkron (psycopg3); Python 3.11.
+- web servisi: bind mount + anonymous node_modules volume ile live-reload (S1-8 sırasında eklendi).
 
 ---
 

@@ -1,5 +1,6 @@
 # api/models/schemas.py
 from datetime import datetime
+from typing import Any
 
 from pydantic import BaseModel
 
@@ -35,6 +36,13 @@ class ClaimOut(BaseModel):
 class ClaimListOut(BaseModel):
     total: int
     items: list[ClaimOut]
+
+
+# Optional operator edits sent alongside an approve. Keys are extraction
+# field names (dotted for nested, e.g. "incident_location.city"); see
+# api/routers/queue.py's EDITABLE_FIELDS for the whitelist.
+class ApproveRequest(BaseModel):
+    edits: dict[str, Any] | None = None
 
 
 class StatsOut(BaseModel):

@@ -1,15 +1,21 @@
+// Only the fields this table renders are required here — `data` is never
+// read, so it's typed loosely on purpose. That keeps this compatible with
+// both useClaims.ts's Claim (Pano) and useQueue.ts's richer Claim (Kuyruk)
+// without importing one hook's type into the other's caller.
 interface Claim {
   id: number;
   channel: string;
   content_type: string;
   urgency: "critical" | "high" | "normal";
-  data: Record<string, unknown>;
+  data: unknown;
   status: string;
   created_at: string;
 }
 
 interface ClaimsTableProps {
   claims: Claim[];
+  onRowClick?: (claim: Claim) => void;
+  selectedId?: number;
 }
 
 const urgencyStyles: Record<Claim["urgency"], string> = {
@@ -24,7 +30,7 @@ const urgencyLabels: Record<Claim["urgency"], string> = {
   normal: "Normal",
 };
 
-export default function ClaimsTable({ claims }: ClaimsTableProps) {
+export default function ClaimsTable({ claims, onRowClick, selectedId }: ClaimsTableProps) {
   const sorted = [...claims].sort((a, b) => {
     const order = { critical: 0, high: 1, normal: 2 };
     return order[a.urgency] - order[b.urgency];
@@ -43,7 +49,13 @@ export default function ClaimsTable({ claims }: ClaimsTableProps) {
       </thead>
       <tbody>
         {sorted.map((claim) => (
-          <tr key={claim.id} className={urgencyStyles[claim.urgency]}>
+          <tr
+            key={claim.id}
+            onClick={onRowClick ? () => onRowClick(claim) : undefined}
+            className={`${urgencyStyles[claim.urgency]} ${onRowClick ? "cursor-pointer" : ""} ${
+              claim.id === selectedId ? "ring-2 ring-inset ring-blue-500" : ""
+            }`}
+          >
             <td className="p-2">{claim.id}</td>
             <td className="p-2">{claim.channel}</td>
             <td className="p-2 font-semibold">
