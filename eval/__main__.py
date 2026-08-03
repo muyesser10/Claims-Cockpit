@@ -7,13 +7,18 @@
 
 `--score` is free and offline. `--run` calls the model and costs money, so it
 prints the sample it is about to buy before it starts.
+
+`--run` without `--mix` uses the pinned baseline sample
+(eval/fixtures/baseline_100_ids.json), which is what keeps a run comparable with
+the 2026-08-02 baseline. `--mix` draws a fresh random sample instead — for a
+smoke test, not for a measurement anyone intends to compare.
 """
 
 import argparse
 import sys
 from pathlib import Path
 
-from eval.loader import BASELINE_CHANNEL_MIX, load_records, sample
+from eval.loader import baseline_ids, load_records, sample, select
 from eval.metrics import build_report, format_report
 from eval.runner import read_results, read_results_meta, run_live, write_results
 from worker.llm.client import ModelTier
@@ -42,7 +47,12 @@ def build_parser() -> argparse.ArgumentParser:
         default=ModelTier.CHEAP.value,
         help="model tier (default: cheap, per ADR-001)",
     )
-    parser.add_argument("--mix", type=parse_mix, default=None, help="channel=count,...")
+    parser.add_argument(
+        "--mix",
+        type=parse_mix,
+        default=None,
+        help="channel=count,... (draws a fresh random sample instead of the pinned baseline)",
+    )
     parser.add_argument("--out", type=Path, default=None, help="where to write the results")
     return parser
 
@@ -58,9 +68,15 @@ def main(argv: list[str] | None = None) -> int:
         print(format_report(build_report(scores)))
         return 0
 
-    mix = args.mix or BASELINE_CHANNEL_MIX
-    records = sample(load_records(), seed=args.seed, mix=mix)
-    print(f"about to call the model for {len(records)} records: {mix}", file=sys.stderr)
+    records = load_records()
+    if args.mix:
+        records = sample(records, seed=args.seed, mix=args.mix)
+        description = f"random sample, seed {args.seed}, mix {args.mix}"
+    else:
+        records = select(records, baseline_ids())
+        description = "pinned baseline sample"
+
+    print(f"about to call the model for {len(records)} records: {description}", file=sys.stderr)
 
     outcome = run_live(
         records,
@@ -70,7 +86,7 @@ def main(argv: list[str] | None = None) -> int:
             f"  {index}/{total} {gt_id}", end="\r", file=sys.stderr
         ),
     )
-    path = write_results(outcome, args.out, meta={"seed": args.seed, "mix": mix})
+    path = write_results(outcome, args.out, meta={"seed": args.seed, "sample": description})
     print(f"\nresults written to {path}\n", file=sys.stderr)
 
     if outcome.failures:

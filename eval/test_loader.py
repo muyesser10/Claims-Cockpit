@@ -6,7 +6,14 @@ from datetime import datetime
 
 import pytest
 
-from eval.loader import BASELINE_CHANNEL_MIX, EvalRecord, load_records, sample
+from eval.loader import (
+    BASELINE_CHANNEL_MIX,
+    EvalRecord,
+    baseline_ids,
+    load_records,
+    sample,
+    select,
+)
 
 TEXT = {"gt_id": "GT-000001", "channel": "email", "text": "aracım çizildi"}
 ANSWER = {
@@ -123,9 +130,33 @@ def test_sample_refuses_to_pad_a_short_channel(tmp_path):
         sample(records, seed=7, mix={"email": 5})
 
 
+def test_select_returns_exactly_the_requested_records(tmp_path):
+    records = load(tmp_path, *corpus())
+    picked = select(records, ["GT-emai-002", "GT-web_-000"])
+    assert [record.gt_id for record in picked] == ["GT-emai-002", "GT-web_-000"]
+
+
+def test_select_refuses_an_id_the_corpus_lost(tmp_path):
+    records = load(tmp_path, *corpus())
+    with pytest.raises(ValueError, match="baseline pairing is broken"):
+        select(records, ["GT-emai-000", "GT-gone-999"])
+
+
+def test_pinned_baseline_is_a_hundred_unique_records():
+    assert len(baseline_ids()) == len(set(baseline_ids())) == 100
+
+
 def test_real_corpus_loads_and_can_feed_the_baseline_mix():
     """Data-integrity guard: catches a regenerated corpus that broke the join."""
     records = load_records()
     assert records
     for channel, count in BASELINE_CHANNEL_MIX.items():
         assert sum(1 for record in records if record.channel == channel) >= count
+
+
+def test_real_corpus_still_carries_every_pinned_record():
+    """Data-integrity guard: a regenerated corpus breaks the baseline pairing."""
+    picked = select(load_records(), baseline_ids())
+    assert len(picked) == 100
+    for channel, count in BASELINE_CHANNEL_MIX.items():
+        assert sum(1 for record in picked if record.channel == channel) == count
