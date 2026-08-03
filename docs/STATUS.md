@@ -54,6 +54,11 @@
 - [x] **S2-8 — Pano sayaç kartları + aciliyet donut + il barı** — @nursenakyga. Backend: `/istatistik/ozet` endpoint'i (`urgency_counts`/`status_counts`/`city_counts`, city verisi `Claim.data.extraction.incident_location.city`'den JSON path ile çekiliyor). Frontend: `useStats.ts` hook + `StatCards`/`UrgencyDonut`/`CityBar` bileşenleri (Recharts), Dashboard.tsx'e entegre. Gerçek veriyle test edildi (kritik/normal ayrımı donut'ta, şehir verisi bar'da doğru görünüyor).
 - [x] **Extraction taban çizgisi ölçümü + prompt ayarı** — 100 kayıt (50/30/20), gpt-4o-mini: zorunlu alan doğruluğu **%99,4**, kanıtsız alan **%3,9** (hedefler ≥%82 / ≤%7). Hasar türü tanımları prompt'a eklendi (`damage_type` %86 → %98), extraction ucuz kademeye alındı (ADR-001 güncellemesi). Ham sonuçlar repo dışında `olcum-arsivi/` — @Cagri12345
 - [x] **`eval/` omurgası (S1-9)** — @Cagri12345. `loader` (iki korpus dosyasını `gt_id` üzerinden birleştirir, deterministik kanal katmanlı örneklem), `normalize` (alan bazında karşılaştırma kuralları; `injury`/`counterparty_exists` için `null`=`false` konvansiyonu tek adreste), `scoring` (kayıt başına isabet, ölçüm arşivinin formatıyla uyumlu), `metrics` (alan doğruluğu + kanıtsız değer oranı + eksik alan tespiti; kanal/alan kırılımı, gürültü tabanı, hata listesi), `runner` (canlı koşu ↔ ücretsiz yeniden puanlama ayrımı), `python -m eval` CLI. 20 kayıtlık arşiv fixture'ıyla regresyon testi (CI kapısı). 68 test, hiçbiri ağa çıkmıyor
+- [x] **S2-12 — Kaynak cümle vurgulama** — @nursenakyga. `SourceHighlight.tsx`:
+  `source_references`'taki `{quote, start, end}` offset'lerini kullanıp bir alana
+  focus olununca `masked_text` içinde ilgili aralığı sarıya boyuyor. `QueueDetail.tsx`'teki
+  10 `FieldWrapper`'a `onActivate` bağlandı. Kanıtsız alanlarda (`start`/`end` null)
+  vurgu göstermiyor — savunmacı, çökmüyor. Gerçek veriyle test edildi (plaka + poliçe no).
 
 ## HENÜZ YAPILMADI
 
@@ -63,7 +68,6 @@
 - [ ] **eval/ kalan metrikler** — @Cagri12345. Omurga hazır (yukarı bak). Eksik: içerik tipi / triyaj doğruluğu + kritik recall (**veri blokerinde**), serbest metin cosine skorlaması (embedding modeline bağlı, Sprint 3), RAG eval seti (40 soru, Sprint 3), pano analitiği hesapları (tasarım §8).
 - [ ] **`worker/masking/llm_sanity.py`** — @Cagri12345. CODEOWNERS'ta ayrılmış, dosya yok. S2-5 masking v2'nin LLM ayağı.
 - [ ] **Çalışan fallback katmanı** — OpenAI birincil, Groq/Gemini/Ollama config'i duruyor ama kod yok (ADR-001 açık maddesi, @bariss9 + @nursenakyga).
-- [ ] **source_references offset + kaynak cümle vurgulama (S2-12)** — @nursenakyga. Offset backend'de zaten çözülüyor (`{quote,start,end}`); kalan iş sadece ekranda vurgulama.
 - [ ] **CLAUDE.md §2/§4 güncellemesi** — hâlâ eski üçlü router'ı anlatıyor; ADR-001'e göre güncellenmeli — @bariss9
 - [ ] `schemas/claim.json` nihai "dondu" işareti
 
@@ -96,7 +100,7 @@
 - [ ] S2-5 Masking v2 — @bariss9
 - [x] **S2-7 — Onay kuyruğu ekranı (düzenle + onayla/reddet + diff)** — @bariss9
 - [x] S2-8 Pano sayaç/donut/il barı — @nursenakyga
-- [ ] S2-12 Kaynak cümle vurgulama — @nursenakyga
+- [x] S2-12 Kaynak cümle vurgulama — @nursenakyga
 - **Dağılım:** bariss9 → S2-4/S2-7/S2-5, nursena → S2-8/S2-12 (mutabık)
 
 ### Sprint 3 — Auth + RAG + Observability  —  DURUM: başlamadı
@@ -112,7 +116,7 @@
 
 | Bekleyen | Beklenen şey | Kimden | Durum |
 |----------|--------------|--------|-------|
-| S2-12 (ekran vurgusu) | — | @nursenakyga | Bağımlılık çözüldü (extraction pipeline'da, offset hazır); kalan iş sadece ekranda vurgulama, backend tarafı hazır |
+
 | **classification (LLM)** | **GT'de `content_type` ve `urgency` etiketlerinin metne yansıtılarak üretilmesi** | **@muyesser10** | **BLOKER — etiketler rastgele atanıyor, metinle ilgisi yok. Detay aşağıda.** |
 | DS branch (feature/ds-analiz-kurulum) | Branch'in akıbeti | @MehmetTayyip | `eval/` sıfırdan, İngilizce alan adlarıyla yeniden yazıldı. Branch'in eval kısmı (ve eski Türkçe alan adı uyuşmazlığı) geçersiz kaldı; ayrıca çok eski bir main'den ayrılmış. Saklanacak bir şey var mı standup'ta bakılacak. |
 
