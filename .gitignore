@@ -30,6 +30,9 @@ data/generated/
 *.dump
 *.sql.gz
 
+# Eval run outputs (archived by hand when a run matters; fixtures are committed)
+eval/results/
+
 # Editor / OS
 .vscode/
 .idea/

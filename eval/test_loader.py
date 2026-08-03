@@ -1,0 +1,131 @@
+# eval/test_loader.py
+"""Tests for the corpus loader. Small fixtures on disk, one guard on the real data."""
+
+import json
+from datetime import datetime
+
+import pytest
+
+from eval.loader import BASELINE_CHANNEL_MIX, EvalRecord, load_records, sample
+
+TEXT = {"gt_id": "GT-000001", "channel": "email", "text": "aracım çizildi"}
+ANSWER = {
+    "gt_id": "GT-000001",
+    "received_at": "2026-07-25T14:00:00",
+    "expected": {"channel": "email", "plate": "45 GAK 2046"},
+}
+
+
+def write(directory, name, records):
+    """Write records as JSONL and return the path."""
+    directory.mkdir(parents=True, exist_ok=True)
+    path = directory / name
+    path.write_text(
+        "".join(json.dumps(record, ensure_ascii=False) + "\n" for record in records),
+        encoding="utf-8",
+    )
+    return path
+
+
+def load(directory, texts, answers):
+    return load_records(write(directory, "t.jsonl", texts), write(directory, "g.jsonl", answers))
+
+
+def corpus(count_per_channel=40):
+    """A synthetic corpus with enough records in every channel to sample from."""
+    texts, answers = [], []
+    for channel in ("email", "call_transcript", "web_form"):
+        for index in range(count_per_channel):
+            gt_id = f"GT-{channel[:4]}-{index:03d}"
+            texts.append({"gt_id": gt_id, "channel": channel, "text": "x"})
+            answers.append(
+                {
+                    "gt_id": gt_id,
+                    "received_at": "2026-07-25T14:00:00",
+                    "expected": {"channel": channel},
+                }
+            )
+    return texts, answers
+
+
+def test_join_maps_every_field(tmp_path):
+    (record,) = load(tmp_path, [TEXT], [ANSWER])
+    assert record == EvalRecord(
+        gt_id="GT-000001",
+        channel="email",
+        text="aracım çizildi",
+        received_at=datetime(2026, 7, 25, 14, 0),
+        expected=ANSWER["expected"],
+    )
+
+
+def test_blank_lines_are_skipped(tmp_path):
+    path = tmp_path / "t.jsonl"
+    path.write_text(json.dumps(TEXT) + "\n\n\n", encoding="utf-8")
+    assert len(load_records(path, write(tmp_path, "g.jsonl", [ANSWER]))) == 1
+
+
+def test_malformed_line_names_its_line_number(tmp_path):
+    path = tmp_path / "t.jsonl"
+    path.write_text('{"gt_id": "GT-1"}\nnot json\n', encoding="utf-8")
+    with pytest.raises(ValueError, match="t.jsonl:2"):
+        load_records(path, write(tmp_path, "g.jsonl", [ANSWER]))
+
+
+def test_text_without_ground_truth_is_an_error(tmp_path):
+    """A silently shrinking corpus makes two runs look comparable when they aren't."""
+    with pytest.raises(ValueError, match="no ground truth"):
+        load(tmp_path, [TEXT, {**TEXT, "gt_id": "GT-000002"}], [ANSWER])
+
+
+def test_ground_truth_without_text_is_an_error(tmp_path):
+    with pytest.raises(ValueError, match="no text"):
+        load(tmp_path, [TEXT], [ANSWER, {**ANSWER, "gt_id": "GT-000002"}])
+
+
+def test_channel_disagreement_between_files_is_an_error(tmp_path):
+    answer = {**ANSWER, "expected": {**ANSWER["expected"], "channel": "web_form"}}
+    with pytest.raises(ValueError, match="channel is 'email'"):
+        load(tmp_path, [TEXT], [answer])
+
+
+def test_sample_is_reproducible_for_one_seed(tmp_path):
+    records = load(tmp_path, *corpus())
+    mix = {"email": 5, "call_transcript": 3, "web_form": 2}
+    first = [record.gt_id for record in sample(records, seed=7, mix=mix)]
+    second = [record.gt_id for record in sample(records, seed=7, mix=mix)]
+    assert first == second
+
+
+def test_sample_honours_the_requested_mix(tmp_path):
+    records = load(tmp_path, *corpus())
+    mix = {"email": 5, "call_transcript": 3, "web_form": 2}
+    picked = sample(records, seed=7, mix=mix)
+    assert len(picked) == 10
+    for channel, count in mix.items():
+        assert sum(1 for record in picked if record.channel == channel) == count
+
+
+def test_sample_ignores_corpus_write_order(tmp_path):
+    """The same records in a different file order must give the same draw."""
+    texts, answers = corpus()
+    forward = load(tmp_path / "a", texts, answers)
+    backward = load(tmp_path / "b", texts[::-1], answers[::-1])
+    mix = {"email": 5, "call_transcript": 3, "web_form": 2}
+    assert {record.gt_id for record in sample(forward, seed=7, mix=mix)} == {
+        record.gt_id for record in sample(backward, seed=7, mix=mix)
+    }
+
+
+def test_sample_refuses_to_pad_a_short_channel(tmp_path):
+    records = load(tmp_path, *corpus(count_per_channel=2))
+    with pytest.raises(ValueError, match="asked for 5, corpus has 2"):
+        sample(records, seed=7, mix={"email": 5})
+
+
+def test_real_corpus_loads_and_can_feed_the_baseline_mix():
+    """Data-integrity guard: catches a regenerated corpus that broke the join."""
+    records = load_records()
+    assert records
+    for channel, count in BASELINE_CHANNEL_MIX.items():
+        assert sum(1 for record in records if record.channel == channel) >= count
