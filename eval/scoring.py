@@ -12,14 +12,28 @@ Per-record work only. Anything that spans records belongs in metrics.py.
 
 from dataclasses import dataclass, field
 
-from eval.normalize import COMPARED_FIELDS, compare
+from eval.normalize import COMPARED_FIELDS, SILENCE_MEANS_FALSE, compare
 from worker.extraction.extractor import SCALAR_FIELDS
 
 # Everything extraction may fill in, dotted where nested — the same list
 # extractor.filled_field_names() walks. Imported rather than repeated so the two
 # cannot drift: `filled_fields` is the denominator of the unsupported-value
 # rate, and a denominator that quietly changes is a broken metric.
+#
+# The 2026-08-02 archive counted a narrower set: 6.84 filled fields per record
+# against 8.29 here, consistent with the two nested location fields not being
+# counted there. The unsupported-value *rate* therefore does not compare across
+# that boundary; the count does — 27 there, 28 here, over the same 100 records.
 FILLABLE_FIELDS = (*SCALAR_FIELDS, "incident_location.city", "incident_location.district")
+
+# The subset of FILLABLE_FIELDS the missing-field metric can actually judge.
+# `injury` and `counterparty_exists` are excluded: the ground truth writes False
+# rather than null when the text is silent (normalize.SILENCE_MEANS_FALSE), so
+# they are never null in the answer key, while the model correctly reports them
+# as missing. Scoring them here contradicts the accuracy metric, which counts
+# that same null as a hit. Measured 2026-08-04 on the paired 100-record run:
+# they produced 100 of the 105 false positives, holding precision at 35%.
+MISSING_METRIC_FIELDS = tuple(name for name in FILLABLE_FIELDS if name not in SILENCE_MEANS_FALSE)
 
 
 @dataclass(frozen=True)
@@ -127,19 +141,28 @@ def to_dict(score: RecordScore) -> dict:
 def from_dict(raw: dict) -> RecordScore:
     """Read a result written by this code or by the 2026-08-02 measurement runs.
 
+    `hit` is recomputed from the stored `gt` and `llm` rather than trusted, so a
+    change to a normalization rule re-scores every past run — which is the whole
+    reason the raw per-record answers are written out. `hits` follows from the
+    fields actually present, so a trimmed file stays self-consistent.
+
     The archived runs predate `missing_fields` and `expected_missing`, so those
     default to empty. metrics.py reports the missing-field metric as unavailable
     rather than as zero when they are — an absent measurement is not a bad score.
     """
     fields = {
-        name: FieldScore(gt=value["gt"], llm=value["llm"], hit=value["hit"])
+        name: FieldScore(
+            gt=value["gt"],
+            llm=value["llm"],
+            hit=compare(name, value["gt"], value["llm"]),
+        )
         for name, value in raw["fields"].items()
     }
     return RecordScore(
         gt_id=raw["gt_id"],
         channel=raw["channel"],
         fields=fields,
-        hits=raw.get("hits", sum(value.hit for value in fields.values())),
+        hits=sum(value.hit for value in fields.values()),
         filled_fields=raw.get("filled_fields", 0),
         unverified_fields=list(raw.get("unverified_fields") or []),
         missing_fields=list(raw.get("missing_fields") or []),

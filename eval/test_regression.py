@@ -12,10 +12,12 @@ Two things this file is NOT:
   - a baseline claim. The slice deliberately contains all five misses from the
     hundred, so it scores 96.88% where the full run scored 99.38%. The number
     here is a fingerprint, not a result.
-  - a test of normalize.py. The archived run stored values that had already been
-    normalized (injury and counterparty_exists arrive as bool, never null), so
-    the normalization rules never fire on this data. They have their own tests
-    in test_normalize.py.
+  - a full test of normalize.py. `hit` is recomputed from the stored gt and llm
+    on read (scoring.from_dict), so the comparison rules do run here, and 155/160
+    is what pins them to the judgements the original measurement script made.
+    The one rule this data cannot exercise is SILENCE_MEANS_FALSE: the archive
+    stored injury and counterparty_exists already resolved to bool, never null.
+    Every rule has its own test in test_normalize.py.
 """
 
 import json

@@ -17,7 +17,7 @@ land once the corpus does.
 from dataclasses import dataclass, field
 
 from eval.normalize import COMPARED_FIELDS
-from eval.scoring import RecordScore
+from eval.scoring import MISSING_METRIC_FIELDS, RecordScore
 
 
 @dataclass(frozen=True)
@@ -151,22 +151,25 @@ def build_report(scores: list[RecordScore]) -> Report:
 
 
 def _missing_detection(scores: list[RecordScore]) -> MissingFieldScore:
-    """Compare what the model said it left out with what the answer key omits."""
-    if not any(score.missing_fields or score.expected_missing for score in scores):
+    """Compare what the model said it left out with what the answer key omits.
+
+    Restricted to the fields this metric can judge; scoring.MISSING_METRIC_FIELDS
+    records why two of them are not among those. Filtering here rather than at
+    scoring time keeps the per-record file a faithful record of what the model
+    said, and lets an already-paid-for run be re-scored under the corrected rule.
+    """
+    measurable = set(MISSING_METRIC_FIELDS)
+    pairs = [
+        (set(score.missing_fields) & measurable, set(score.expected_missing) & measurable)
+        for score in scores
+    ]
+    if not any(claimed or actual for claimed, actual in pairs):
         return MissingFieldScore(available=False)
 
-    true_positives = false_positives = false_negatives = 0
-    for score in scores:
-        claimed = set(score.missing_fields)
-        actual = set(score.expected_missing)
-        true_positives += len(claimed & actual)
-        false_positives += len(claimed - actual)
-        false_negatives += len(actual - claimed)
-
     return MissingFieldScore(
-        true_positives=true_positives,
-        false_positives=false_positives,
-        false_negatives=false_negatives,
+        true_positives=sum(len(claimed & actual) for claimed, actual in pairs),
+        false_positives=sum(len(claimed - actual) for claimed, actual in pairs),
+        false_negatives=sum(len(actual - claimed) for claimed, actual in pairs),
     )
 
 

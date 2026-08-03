@@ -107,6 +107,20 @@ def test_missing_field_detection_scores_precision_and_recall():
     assert detection.recall == 0.5
 
 
+def test_missing_field_detection_ignores_the_fields_it_cannot_judge():
+    """A correct null on injury/counterparty must not count against precision."""
+    scores = [
+        make_score(
+            gt_id="GT-1",
+            missing_fields=["injury", "counterparty_exists", "policy_no"],
+            expected_missing=["policy_no"],
+        )
+    ]
+    detection = build_report(scores).missing_detection
+    assert (detection.true_positives, detection.false_positives) == (1, 0)
+    assert detection.precision == 1.0
+
+
 def test_missing_field_detection_is_absent_not_zero_without_data():
     """The archived runs predate the field; reporting 0% would be a lie."""
     detection = build_report([make_score()]).missing_detection

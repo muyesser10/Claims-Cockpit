@@ -4,6 +4,7 @@
 from eval.normalize import COMPARED_FIELDS
 from eval.scoring import (
     FILLABLE_FIELDS,
+    MISSING_METRIC_FIELDS,
     filled_names,
     from_dict,
     null_names,
@@ -53,6 +54,13 @@ def test_fillable_field_list_matches_the_extractor():
     assert len(FILLABLE_FIELDS) == 10
     assert "incident_location.city" in FILLABLE_FIELDS
     assert "damage_description" in FILLABLE_FIELDS
+
+
+def test_missing_metric_excludes_the_fields_it_cannot_judge():
+    """The corpus never writes null for these two, so they are unmeasurable."""
+    assert "injury" not in MISSING_METRIC_FIELDS
+    assert "counterparty_exists" not in MISSING_METRIC_FIELDS
+    assert len(MISSING_METRIC_FIELDS) == len(FILLABLE_FIELDS) - 2
 
 
 def test_a_matching_record_scores_every_compared_field():
@@ -135,9 +143,19 @@ def test_archived_run_can_be_read_back():
     """The 2026-08-02 runs must stay readable; they are the baseline."""
     restored = from_dict(ARCHIVED)
     assert restored.gt_id == "GT-000001"
-    assert restored.hits == 8
+    # hits follows from the fields present rather than the stored total: this
+    # trimmed sample carries two of the eight.
+    assert restored.hits == 2
     assert restored.filled_fields == 6
     assert restored.fields["damage_type"].hit
     # Fields the archive predates come back empty, not wrong.
     assert restored.missing_fields == []
     assert restored.expected_missing == []
+
+
+def test_hit_is_recomputed_rather_than_trusted():
+    """A stored hit that disagrees with its own values is corrected on read."""
+    raw = {**ARCHIVED, "fields": {"damage_type": {"gt": "animal", "llm": "collision", "hit": True}}}
+    restored = from_dict(raw)
+    assert not restored.fields["damage_type"].hit
+    assert restored.hits == 0
