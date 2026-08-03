@@ -7,6 +7,11 @@ holding `gt`, `llm` and `hit`, plus `hits`, `filled_fields` and
 `unverified_fields`. Keeping the shape means the archive can be re-scored by
 this code, which is what test_regression.py checks.
 
+Two keys go beyond that shape: `expected` and `extraction` carry the full pair
+the score was derived from, so a metric written later can be computed from a run
+that is already paid for. Reading stays backwards compatible — an archived run
+simply has neither.
+
 Per-record work only. Anything that spans records belongs in metrics.py.
 """
 
@@ -59,6 +64,16 @@ class RecordScore:
     expected_missing: list[str] = field(default_factory=list)
     duration_ms: int | None = None
     reasoning: str = ""
+
+    # The full pair the score was derived from. Kept because a metric nobody has
+    # written yet cannot be added afterwards otherwise: damage_description is
+    # free text, is not among COMPARED_FIELDS, and was therefore absent from the
+    # 2026-08-04 run — measuring it would have meant paying for the model again.
+    # The answer key is stored too, so a result stays readable after the corpus
+    # is regenerated, which text_generator.py does wholesale (991 of 1000
+    # records in PR #25).
+    expected: dict = field(default_factory=dict)
+    extraction: dict = field(default_factory=dict)
 
 
 def dotted_value(data: dict, name: str) -> object:
@@ -116,6 +131,8 @@ def score_record(
         expected_missing=null_names(expected),
         duration_ms=duration_ms,
         reasoning=reasoning,
+        expected=expected,
+        extraction=extraction,
     )
 
 
@@ -135,6 +152,8 @@ def to_dict(score: RecordScore) -> dict:
         "expected_missing": score.expected_missing,
         "duration_ms": score.duration_ms,
         "reasoning": score.reasoning,
+        "expected": score.expected,
+        "extraction": score.extraction,
     }
 
 
@@ -146,9 +165,10 @@ def from_dict(raw: dict) -> RecordScore:
     reason the raw per-record answers are written out. `hits` follows from the
     fields actually present, so a trimmed file stays self-consistent.
 
-    The archived runs predate `missing_fields` and `expected_missing`, so those
-    default to empty. metrics.py reports the missing-field metric as unavailable
-    rather than as zero when they are — an absent measurement is not a bad score.
+    The archived runs predate `missing_fields`, `expected_missing`, `expected`
+    and `extraction`, so those come back empty. metrics.py reports the
+    missing-field metric as unavailable rather than as zero when they are — an
+    absent measurement is not a bad score.
     """
     fields = {
         name: FieldScore(
@@ -169,4 +189,6 @@ def from_dict(raw: dict) -> RecordScore:
         expected_missing=list(raw.get("expected_missing") or []),
         duration_ms=raw.get("duration_ms"),
         reasoning=raw.get("reasoning", ""),
+        expected=raw.get("expected") or {},
+        extraction=raw.get("extraction") or {},
     )

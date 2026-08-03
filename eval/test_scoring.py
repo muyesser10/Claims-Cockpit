@@ -114,6 +114,13 @@ def test_unverified_fields_are_carried_through_sorted():
     assert result.unverified_fields == ["damage_type", "plate"]
 
 
+def test_the_full_pair_is_carried_for_metrics_not_yet_written():
+    """damage_description is free text and uncompared; it still has to survive."""
+    result = score()
+    assert result.expected["damage_description"] == "bir ineğe çarpma"
+    assert result.extraction["damage_description"] == "bir ineğe çarptım"
+
+
 def test_round_trip_through_the_serialised_form():
     original = score(unverified_fields=["plate"], duration_ms=4487, reasoning="kısa not")
     restored = from_dict(to_dict(original))
@@ -151,6 +158,8 @@ def test_archived_run_can_be_read_back():
     # Fields the archive predates come back empty, not wrong.
     assert restored.missing_fields == []
     assert restored.expected_missing == []
+    assert restored.expected == {}
+    assert restored.extraction == {}
 
 
 def test_hit_is_recomputed_rather_than_trusted():
