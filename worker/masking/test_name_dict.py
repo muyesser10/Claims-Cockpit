@@ -70,3 +70,54 @@ def test_ascii_name_still_matched_regression():
     masked, mappings = mask_names("Ahmet geldi")
     assert "[NAME_1]" in masked
     assert mappings[0]["real_value"] == "Ahmet"
+
+
+# --- Dictionary expansion (turkish_names.txt) --------------------------------
+
+
+def test_name_from_turkish_names_file_is_masked():
+    """A name that only exists in data/dictionaries/turkish_names.txt (not
+    in the original v0 set) is matched too — confirms the file was loaded
+    into COMMON_NAMES."""
+    masked, mappings = mask_names("Abdulkadir aradi")
+    assert "[NAME_1]" in masked
+    assert mappings[0]["real_value"] == "Abdulkadir"
+
+
+# --- Ambiguous names: surname / context gating (S2-5) ------------------------
+
+
+def test_ambiguous_name_with_surname_neighbor_is_masked():
+    """ "Deniz" collides with the everyday word "deniz" (sea), but a
+    following surname is real evidence it's a name here."""
+    masked, mappings = mask_names("Deniz Yilmaz aradi")
+    assert "[NAME_1]" in masked
+    assert "Deniz" not in masked
+    assert mappings[0]["real_value"] == "Deniz"
+
+
+def test_ambiguous_name_with_context_marker_sayin_is_masked():
+    masked, mappings = mask_names("Sayin Deniz, hasar bildiriyorum")
+    assert "[NAME_1]" in masked
+    assert "Deniz" not in masked
+
+
+def test_ambiguous_name_with_context_marker_ad_soyad_is_masked():
+    masked, mappings = mask_names("Ad Soyad: Deniz hasar formu")
+    assert "[NAME_1]" in masked
+
+
+def test_ambiguous_name_without_evidence_is_not_masked():
+    """No surname neighbor, no context marker — "yagmur" (rain) stays a
+    plain word, not a name."""
+    masked, mappings = mask_names("Yagmur yagdi dun")
+    assert masked == "Yagmur yagdi dun"
+    assert mappings == []
+
+
+def test_non_ambiguous_name_still_masked_unconditionally():
+    """A COMMON_NAMES entry that is NOT in AMBIGUOUS_NAMES is masked
+    regardless of neighbors — the ambiguous-name gate must not affect it."""
+    masked, mappings = mask_names("Ahmet aradi")
+    assert "[NAME_1]" in masked
+    assert mappings[0]["real_value"] == "Ahmet"
