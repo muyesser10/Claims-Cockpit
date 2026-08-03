@@ -54,9 +54,9 @@ değerleri oradan al.
    Hayvan, direk, duvar, bariyer, düşen cisim karşı taraf değildir.
 
 7. MASKELENMİŞ VERİ
-   Metinde [PLAKA_1], [TC_1], [TELEFON_1], [AD_1] gibi yer tutucular görebilirsin;
-   bunlar maskelenmiş kişisel veridir. Yer tutucuyu olduğu gibi değer olarak yaz.
-   Arkasındaki gerçek değeri tahmin etmeye çalışma.
+   Metinde [PLATE_1], [TC_1], [PHONE_1], [NAME_1], [IBAN_1] gibi yer tutucular
+   görebilirsin; bunlar maskelenmiş kişisel veridir. Yer tutucuyu olduğu gibi
+   değer olarak yaz. Arkasındaki gerçek değeri tahmin etmeye çalışma.
 
 8. MUHAKEME
    reasoning alanını en başta doldur: göreli tarihi nasıl çözdüğünü, metindeki
@@ -177,7 +177,7 @@ Mesajın geliş tarihi: 2026-07-15T11:00:00
 Kanal: call_transcript
 --- İHBAR METNİ ---
 Ajan: Merhaba, hasar ihbarınız için yardımcı olayım. Plakanızı alabilir miyim?
-Müşteri: [PLAKA_1] ... pardon, evet aracın plakası [PLAKA_1].
+Müşteri: [PLATE_1] ... pardon, evet aracın plakası [PLATE_1].
 Ajan: Olay ne zaman oldu?
 Müşteri: Dün öğlen. İzmir'de, Bornova'da. Dolu yağdı, kaputta göçükler var.
 Ajan: Araçta yaralanan oldu mu?
@@ -191,7 +191,7 @@ Müşteri: Şu an yanımda değil, sonra ileteceğim.
                 maskelenmiş, yer tutucu aynen alındı. Yaralanma açıkça
                 yok denmiş. Poliçe no verilmemiş.",
   "policy_no": null,
-  "plate": "[PLAKA_1]",
+  "plate": "[PLATE_1]",
   "incident_date": "2026-07-14",
   "incident_location": { "city": "İzmir", "district": "Bornova" },
   "damage_description": "dolu nedeniyle kaputta göçükler oluştu",
@@ -201,7 +201,7 @@ Müşteri: Şu an yanımda değil, sonra ileteceğim.
   "estimated_amount": null,
   "missing_fields": ["policy_no", "counterparty_exists", "estimated_amount"],
   "source_references": {
-    "plate": "aracın plakası [PLAKA_1]",
+    "plate": "aracın plakası [PLATE_1]",
     "incident_date": "Dün öğlen",
     "incident_location.city": "İzmir'de",
     "incident_location.district": "Bornova'da",
