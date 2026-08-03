@@ -72,22 +72,22 @@
 ## SPRINT İLERLEMESİ
 
 ### Sprint 1 — İskelet + İlk Uçtan Uca  —  DURUM: bitti (eval hariç)
-- [x] compose 6 servis (hepsi çalışıyor)
-- [x] FastAPI iskelet + `/health`
-- [x] `schemas/claim.json`
-- [x] Alembic migration (VECTOR 384 + external_ref)
-- [x] `/ingest` + `/claims` + `/claims/{id}`
-- [x] **Masking v1 (S1-4)**
-- [x] GT üreteci (S1-1)
-- [x] Worker kuyruk tüketici pipeline (S1-5)
-- [x] LLM istemcisi + extraction prompt/extractor (S1-15) — ADR-001 ile OpenAI'ye dönüştü; pipeline'a bağlandı (extraction + validation) @nursenakyga
-- [x] web/ Vite iskeleti (S1-13)
-- [x] Pano ham liste ekranı (S1-8)
-- [x] text_generator / e-posta üreteci (S1-2)
-- [x] Türkçe cümle bölücü (S1-3)
-- [x] replay v1 (S1-10) — emails.jsonl → /ingest
-- [~] eval (S1-9) — omurga + 3 metrik yazıldı (@Cagri12345); metrik 2/3/5 veri blokerinde
-- [ ] Sprint 1 demo
+* [x] compose 6 servis (hepsi çalışıyor)
+* [x] FastAPI iskelet + `/health`
+* [x] `schemas/claim.json`
+* [x] Alembic migration (VECTOR 384 + external_ref)
+* [x] `/ingest` + `/claims` + `/claims/{id}`
+* [x] **Masking v1 (S1-4)**
+* [x] GT üreteci (S1-1)
+* [x] Worker kuyruk tüketici pipeline (S1-5)
+* [x] LLM istemcisi + extraction prompt/extractor (S1-15) — ADR-001 ile OpenAI'ye dönüştü; pipeline'a bağlandı (extraction + validation) @nursenakyga
+* [x] web/ Vite iskeleti (S1-13)
+* [x] Pano ham liste ekranı (S1-8)
+* [x] text_generator / e-posta üreteci (S1-2)
+* [x] Türkçe cümle bölücü (S1-3)
+* [x] replay v1 (S1-10) — emails.jsonl → /ingest
+* [~] eval (S1-9) — omurga + 3 metrik yazıldı (@Cagri12345); metrik 2/3/5 veri blokerinde
+* [ ] Sprint 1 demo
 
 ### Sprint 2 — Kuyruk + Pano Tam + Masking v2  —  DURUM: aktif
 - [x] S2-DE-1 — counterparty_exists artık damage_type'a bağlı — @muyesser10
@@ -100,6 +100,10 @@
 - **Dağılım:** bariss9 → S2-4/S2-7/S2-5, nursena → S2-8/S2-12 (mutabık)
 
 ### Sprint 3 — Auth + RAG + Observability  —  DURUM: başlamadı
+* **bariss9'a atanan:** S3-8 (JWT auth + operatör/admin rolleri), S3-9 (Grafana+Prometheus temel panolar, DS ile ortak), S3-4 (Pano/Kuyruk UX — 🔴 hangi ekran olduğu netleşmeli, standup'ta konuşulacak).
+* Önerilen sıra: S3-8 (önce, [BREAKING] olabilir, auth altyapısı) → S3-9 (paralel) → S3-4.
+* S3-8 ön analizi yapıldı: `users` tablosu + migration zaten var, hiçbir endpoint'te auth yok, worker API'ye hiç istek atmıyor (etkilenmez), frontend hook'larında Authorization header yok, JWT/hash kütüphanesi requirements.txt'te yok — eklenmeli.
+
 ### Sprint 4 — Cila + Hata Merkezi + Demo  —  DURUM: başlamadı
 
 ---
