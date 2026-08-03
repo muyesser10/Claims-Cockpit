@@ -5,10 +5,10 @@ import Question from './pages/Question';
 import Metrics from './pages/Metrics';
 
 const navItems = [
-  { to: "/", label: "Dashboard" },
-  { to: "/kuyruk", label: "Queue" },
-  { to: "/soru", label: "Question" },
-  { to: "/metrikler", label: "Metrics" },
+  { to: "/", label: "Pano" },
+  { to: "/kuyruk", label: "Kuyruk" },
+  { to: "/soru", label: "Soru" },
+  { to: "/metrikler", label: "Metrikler" },
 ];
 
 export default function App() {
