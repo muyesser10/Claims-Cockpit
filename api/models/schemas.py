@@ -35,3 +35,9 @@ class ClaimOut(BaseModel):
 class ClaimListOut(BaseModel):
     total: int
     items: list[ClaimOut]
+
+
+class StatsOut(BaseModel):
+    urgency_counts: dict[str, int]
+    status_counts: dict[str, int]
+    city_counts: dict[str, int]

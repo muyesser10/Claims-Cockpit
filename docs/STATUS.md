@@ -59,6 +59,12 @@ classification hâlâ deterministik keyword kuralı, LLM'e bağlı değil.
   claim.urgency/content_type üzerinde koşuyor, sonuç `Claim.data.validation_flags`'a ve
   `audit_trail`'e yazılıyor. Flag'ler engellemiyor, sadece görünür kılıyor. Gerçek veriyle
   test edildi (doğru format flag üretmiyor, format hatası doğru yakalanıyor).
+- [x] **S2-8 — Pano sayaç kartları + aciliyet donut + il barı** — @nursenakyga.
+  Backend: `/istatistik/ozet` endpoint'i (`urgency_counts`/`status_counts`/`city_counts`,
+  city verisi `Claim.data.extraction.incident_location.city`'den JSON path ile çekiliyor).
+  Frontend: `useStats.ts` hook + `StatCards`/`UrgencyDonut`/`CityBar` bileşenleri
+  (Recharts), Dashboard.tsx'e entegre. Gerçek veriyle test edildi (kritik/normal
+  ayrımı donut'ta, şehir verisi bar'da doğru görünüyor).
 
 ## HENÜZ YAPILMADI
 
@@ -68,7 +74,6 @@ classification hâlâ deterministik keyword kuralı, LLM'e bağlı değil.
 - [ ] **eval/ (S1-9)** — @MehmetTayyip. feature/ds-analiz-kurulum branch'inde var ama MERGE BLOKERİ (aşağıya bak).
 - [ ] **Çalışan fallback katmanı** — OpenAI birincil, Groq/Gemini/Ollama config'i duruyor ama kod yok (ADR-001 açık maddesi, @bariss9 + @nursenakyga).
 - [ ] **source_references offset + kaynak cümle vurgulama (S2-12)** — @nursenakyga. Extraction pipeline'a bağlanınca; `text.find(quote)` offset + ekran vurgusu.
-- [ ] **Pano sayaç kartları / donut / il barı (S2-8)** — @nursenakyga.
 - [ ] **CLAUDE.md §2/§4 güncellemesi** — hâlâ eski üçlü router'ı anlatıyor; ADR-001'e göre güncellenmeli — @bariss9
 - [ ] `schemas/claim.json` nihai "dondu" işareti
 
@@ -100,7 +105,7 @@ classification hâlâ deterministik keyword kuralı, LLM'e bağlı değil.
 - [x] **S2-4 — Kuyruk backend (onayla/reddet + audit)** — @bariss9
 - [ ] S2-5 Masking v2 — @bariss9
 - [ ] S2-7 Onay kuyruğu ekranı — @bariss9
-- [ ] S2-8 Pano sayaç/donut/il barı — @nursenakyga
+- [x] S2-8 Pano sayaç/donut/il barı — @nursenakyga
 - [ ] S2-12 Kaynak cümle vurgulama — @nursenakyga
 - **Dağılım:** bariss9 → S2-4/S2-7/S2-5, nursena → S2-8/S2-12 (mutabık)
 
