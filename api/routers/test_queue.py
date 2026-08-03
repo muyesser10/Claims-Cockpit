@@ -143,6 +143,137 @@ def test_approve_already_approved_claim_returns_409(db_session):
     assert "approved" in response.json()["detail"]
 
 
+# --- POST /queue/{id}/approve with edits --------------------------------------
+
+
+def _make_claim_with_extraction(db_session, extraction: dict, **kwargs):
+    claim = _make_claim(db_session, **kwargs)
+    claim.data = {"masked_text": "...", "extraction": extraction}
+    db_session.commit()
+    db_session.refresh(claim)
+    return claim
+
+
+def test_approve_without_edits_still_works_backward_compatible(db_session):
+    claim = _make_claim_with_extraction(db_session, {"plate": "34 ABC 123"})
+
+    response = client.post(f"/queue/{claim.id}/approve", json={})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "approved"
+    assert body["data"]["extraction"]["plate"] == "34 ABC 123"
+
+    audit = db_session.execute(
+        select(AuditTrail).where(AuditTrail.claim_id == claim.id, AuditTrail.step == "approve")
+    ).scalar_one()
+    assert audit.detail == {"from": "in_human_review", "to": "approved"}
+    assert "edits" not in audit.detail
+
+
+def test_approve_with_edits_updates_extraction_and_writes_diff(db_session):
+    claim = _make_claim_with_extraction(
+        db_session, {"plate": "34ABC123", "damage_type": "collision"}
+    )
+
+    response = client.post(
+        f"/queue/{claim.id}/approve",
+        json={"edits": {"plate": "34 ABC 123"}},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["data"]["extraction"]["plate"] == "34 ABC 123"
+    assert body["data"]["extraction"]["damage_type"] == "collision"
+
+    audit = db_session.execute(
+        select(AuditTrail).where(AuditTrail.claim_id == claim.id, AuditTrail.step == "approve")
+    ).scalar_one()
+    assert audit.detail["edits"] == [
+        {"field": "plate", "before": "34ABC123", "after": "34 ABC 123"}
+    ]
+
+
+def test_approve_with_nested_edit_updates_incident_location(db_session):
+    claim = _make_claim_with_extraction(
+        db_session, {"incident_location": {"city": "Ankara", "district": None}}
+    )
+
+    response = client.post(
+        f"/queue/{claim.id}/approve",
+        json={"edits": {"incident_location.city": "İstanbul"}},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["data"]["extraction"]["incident_location"] == {
+        "city": "İstanbul",
+        "district": None,
+    }
+
+    audit = db_session.execute(
+        select(AuditTrail).where(AuditTrail.claim_id == claim.id, AuditTrail.step == "approve")
+    ).scalar_one()
+    assert audit.detail["edits"] == [
+        {"field": "incident_location.city", "before": "Ankara", "after": "İstanbul"}
+    ]
+
+
+def test_approve_with_non_editable_field_returns_400(db_session):
+    claim = _make_claim_with_extraction(db_session, {"plate": "34 ABC 123"})
+
+    response = client.post(
+        f"/queue/{claim.id}/approve",
+        json={"edits": {"masked_text": "değiştirilmiş metin"}},
+    )
+
+    assert response.status_code == 400
+    assert "masked_text" in response.json()["detail"]
+
+
+def test_approve_with_same_value_produces_no_diff(db_session):
+    claim = _make_claim_with_extraction(db_session, {"plate": "34 ABC 123"})
+
+    response = client.post(
+        f"/queue/{claim.id}/approve",
+        json={"edits": {"plate": "34 ABC 123"}},
+    )
+
+    assert response.status_code == 200
+    audit = db_session.execute(
+        select(AuditTrail).where(AuditTrail.claim_id == claim.id, AuditTrail.step == "approve")
+    ).scalar_one()
+    assert "edits" not in audit.detail
+
+
+def test_approve_with_edits_and_no_extraction_returns_409(db_session):
+    claim = _make_claim(db_session, status="in_human_review")  # data={}, no extraction
+
+    response = client.post(
+        f"/queue/{claim.id}/approve",
+        json={"edits": {"plate": "34 ABC 123"}},
+    )
+
+    assert response.status_code == 409
+    assert "extraction" in response.json()["detail"].lower()
+
+
+def test_approve_edit_is_actually_persisted_to_db(db_session):
+    claim = _make_claim_with_extraction(db_session, {"plate": "34ABC123"})
+
+    client.post(
+        f"/queue/{claim.id}/approve",
+        json={"edits": {"plate": "34 ABC 123"}},
+    )
+
+    # db_session is a separate session from the one the request used; without
+    # expiring it, SQLAlchemy's identity map would hand back the stale object
+    # it already loaded in _make_claim_with_extraction instead of re-querying.
+    db_session.expire_all()
+    reloaded = db_session.execute(select(Claim).where(Claim.id == claim.id)).scalar_one()
+    assert reloaded.data["extraction"]["plate"] == "34 ABC 123"
+
+
 # --- POST /queue/{id}/reject -------------------------------------------------
 
 
