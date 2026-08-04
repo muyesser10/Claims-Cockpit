@@ -20,6 +20,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 TEXTS_PATH = REPO_ROOT / "data" / "texts.jsonl"
 GROUND_TRUTH_PATH = REPO_ROOT / "data" / "ground_truth_enriched.jsonl"
+BASELINE_IDS_PATH = Path(__file__).resolve().parent / "fixtures" / "baseline_100_ids.json"
 
 # The channel mix of the 2026-08-02 baseline run. Holding it fixed is what makes
 # a later number comparable with that one; a run with a different mix is a
@@ -98,6 +99,34 @@ def load_records(
             )
         )
     return records
+
+
+def baseline_ids(path: Path = BASELINE_IDS_PATH) -> list[str]:
+    """The 100 records the 2026-08-02 extraction baseline measured.
+
+    Pinned rather than resampled. `sample(seed=42)` draws a different hundred —
+    7 in common — and comparing a run with the baseline across two different
+    samples buries a real change under sampling luck. Every later run reuses
+    these, so the comparison stays paired for as long as the corpus holds.
+    """
+    return json.loads(path.read_text(encoding="utf-8"))["gt_ids"]
+
+
+def select(records: list[EvalRecord], gt_ids: list[str]) -> list[EvalRecord]:
+    """Pick exactly these records, in the order given.
+
+    A pinned id the corpus no longer carries is an error, not a record to skip.
+    Failing here is the point: the alternative is a quietly shorter run that
+    still reports a rate as though nothing had changed.
+    """
+    by_id = {record.gt_id: record for record in records}
+    absent = [gt_id for gt_id in gt_ids if gt_id not in by_id]
+    if absent:
+        raise ValueError(
+            f"{len(absent)} pinned gt_id are not in the corpus (first: {absent[0]}); "
+            "the corpus was regenerated and the baseline pairing is broken"
+        )
+    return [by_id[gt_id] for gt_id in gt_ids]
 
 
 def sample(

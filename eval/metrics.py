@@ -17,7 +17,16 @@ land once the corpus does.
 from dataclasses import dataclass, field
 
 from eval.normalize import COMPARED_FIELDS
-from eval.scoring import RecordScore
+from eval.scoring import MISSING_METRIC_FIELDS, RecordScore
+
+# Fields that moved between two identical runs - same prompt, same seed, same
+# sample, same model - measured 2026-08-04 over the pinned 100-record sample:
+# three on counterparty_exists, one on incident_date (a relative date resolved
+# one day either side of a month boundary). The note this file used to carry
+# said "about a field", which was the resolution of the measurement, 1/800, not
+# its repeatability. Measured from a single repeat, so it is a floor rather than
+# a bound; more repeats can only widen it.
+REPEAT_DRIFT_FIELDS = 4
 
 
 @dataclass(frozen=True)
@@ -91,13 +100,14 @@ class Report:
 
     @property
     def noise_floor(self) -> float:
-        """One field either way, as a share of the total compared.
+        """How far a repeated run drifts, as a share of the fields compared.
 
-        Measured 2026-08-02: with temperature 0 and a pinned seed, a repeated
-        run still moves by about a field. Differences below this are not
-        results, and the report prints it next to the accuracy for that reason.
+        A difference smaller than this is not a result, which is why the report
+        prints it beside the accuracy. See REPEAT_DRIFT_FIELDS for where the
+        number comes from and how much weight it carries.
         """
-        return 1 / self.field_accuracy.total if self.field_accuracy.total else 0.0
+        total = self.field_accuracy.total
+        return REPEAT_DRIFT_FIELDS / total if total else 0.0
 
 
 def build_report(scores: list[RecordScore]) -> Report:
@@ -151,22 +161,25 @@ def build_report(scores: list[RecordScore]) -> Report:
 
 
 def _missing_detection(scores: list[RecordScore]) -> MissingFieldScore:
-    """Compare what the model said it left out with what the answer key omits."""
-    if not any(score.missing_fields or score.expected_missing for score in scores):
+    """Compare what the model said it left out with what the answer key omits.
+
+    Restricted to the fields this metric can judge; scoring.MISSING_METRIC_FIELDS
+    records why two of them are not among those. Filtering here rather than at
+    scoring time keeps the per-record file a faithful record of what the model
+    said, and lets an already-paid-for run be re-scored under the corrected rule.
+    """
+    measurable = set(MISSING_METRIC_FIELDS)
+    pairs = [
+        (set(score.missing_fields) & measurable, set(score.expected_missing) & measurable)
+        for score in scores
+    ]
+    if not any(claimed or actual for claimed, actual in pairs):
         return MissingFieldScore(available=False)
 
-    true_positives = false_positives = false_negatives = 0
-    for score in scores:
-        claimed = set(score.missing_fields)
-        actual = set(score.expected_missing)
-        true_positives += len(claimed & actual)
-        false_positives += len(claimed - actual)
-        false_negatives += len(actual - claimed)
-
     return MissingFieldScore(
-        true_positives=true_positives,
-        false_positives=false_positives,
-        false_negatives=false_negatives,
+        true_positives=sum(len(claimed & actual) for claimed, actual in pairs),
+        false_positives=sum(len(claimed - actual) for claimed, actual in pairs),
+        false_negatives=sum(len(actual - claimed) for claimed, actual in pairs),
     )
 
 
@@ -180,7 +193,8 @@ def format_report(report: Report, *, max_misses: int = 20) -> str:
         f"records            {report.records}",
         f"field accuracy     {report.field_accuracy}   target >= 82%",
         f"unsupported values {report.unsupported}   target <= 7%",
-        f"noise floor        +/-{report.noise_floor:.2%} (one field)",
+        f"noise floor        +/-{report.noise_floor:.2%} "
+        f"({REPEAT_DRIFT_FIELDS} fields, one repeat)",
         "",
         "per channel",
     ]
