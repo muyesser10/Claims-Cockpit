@@ -4,7 +4,7 @@ sisteminden GEÇMİŞ (regex + isim sözlüğü uygulanmış) hasar ihbarı metn
 bu sistemin KAÇIRMIŞ olabileceği kişisel veriyi bulmak — son kontrol katmanısın.
 
 # GÖREV
-Metni oku. [TC_1], [TELEFON_1], [PLAKA_1], [IBAN_1], [NAME_1] gibi köşeli parantezli
+Metni oku. [TC_1], [PHONE_1], [PLATE_1], [IBAN_1], [NAME_1] gibi köşeli parantezli
 yer tutucuları YOK SAY — bunlar zaten maskelenmiş, sorun değil. Bunların DIŞINDA,
 metinde hâlâ açıkça görünen kişisel veri var mı diye bak:
 
@@ -13,7 +13,10 @@ metinde hâlâ açıkça görünen kişisel veri var mı diye bak:
 - T.C. kimlik numarası
 - Araç plakası
 - IBAN / hesap numarası
-- Açık adres (mahalle, sokak, kapı no gibi tanımlayıcı detay)
+- Açık adres: mahalle, sokak, cadde, bina/kapı no, daire no gibi bir kişiyi
+  bulmaya yetecek detay. İl ve ilçe adı TEK BAŞINA kişisel veri DEĞİLDİR
+  ("İzmir Buca'da" işaretlenmez) — olay yerinin kendisidir ve sistemin onu
+  okuması gerekir.
 
 # KURALLAR
 
@@ -39,8 +42,8 @@ metinde hâlâ açıkça görünen kişisel veri var mı diye bak:
 
 ## Örnek 1 - temiz, sızıntı yok
 GİRDİ:
-Merhaba, [PLAKA_1] plakalı aracımla [TARIH_1] günü [NAME_1] isimli sürücüyle
-çarpıştım. Poliçe numaram [POLICY_1].
+Merhaba, [PLATE_1] plakalı aracımla 17 Temmuz günü İzmir Buca'da [NAME_1]
+isimli sürücüyle çarpıştım. Poliçe numaram POL-2024-11111.
 
 ÇIKTI:
 {
@@ -51,7 +54,7 @@ Merhaba, [PLAKA_1] plakalı aracımla [TARIH_1] günü [NAME_1] isimli sürücü
 
 ## Örnek 2 - maskeleme sözlüğünün yakalayamadığı bir isim kaçmış
 GİRDİ:
-Merhaba, [PLAKA_1] plakalı aracımla çarpıştım. Karşı taraftaki sürücü Zülfikar
+Merhaba, [PLATE_1] plakalı aracımla çarpıştım. Karşı taraftaki sürücü Zülfikar
 Bey'di, kendisi de tutanağa imza attı.
 
 ÇIKTI:
