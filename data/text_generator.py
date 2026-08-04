@@ -29,6 +29,9 @@ def load_dictionaries() -> dict:
     form_damage_phrases = json.loads(
         (DICT_DIR / "form_damage_phrases.json").read_text(encoding="utf-8")
     )
+    info_request_templates = _read_lines(DICT_DIR / "info_request_templates.txt")
+    irrelevant_templates = _read_lines(DICT_DIR / "irrelevant_templates.txt")
+    urgency_phrases = json.loads((DICT_DIR / "urgency_phrases.json").read_text(encoding="utf-8"))
     fillers = _read_lines(DICT_DIR / "filler_words.txt")
     openings = _read_lines(DICT_DIR / "opening_templates.txt")
     closings = _read_lines(DICT_DIR / "closing_templates.txt")
@@ -42,6 +45,9 @@ def load_dictionaries() -> dict:
     return {
         "damage_phrases": damage_phrases,
         "form_damage_phrases": form_damage_phrases,
+        "info_request_templates": info_request_templates,
+        "irrelevant_templates": irrelevant_templates,
+        "urgency_phrases": urgency_phrases,
         "fillers": fillers,
         "openings": openings,
         "closings": closings,
@@ -137,7 +143,13 @@ def _district_suffix(district: str) -> str:
     return "'da" if last_vowel in back_vowels else "'de"
 
 
-def build_body(gt: dict, damage_phrase: str, date_phrase: str) -> str:
+def urgency_phrase(expected: dict, dicts: dict) -> str:
+    """Return an urgency cue for the text, or empty for normal."""
+    phrases = dicts["urgency_phrases"].get(expected["urgency"], [])
+    return random.choice(phrases) if phrases else ""
+
+
+def build_body(gt: dict, damage_phrase: str, date_phrase: str, dicts: dict) -> str:
     """Build the email body from ground truth, respecting null fields.
 
     Fields that are null in ground truth must NOT appear in the text,
@@ -166,7 +178,10 @@ def build_body(gt: dict, damage_phrase: str, date_phrase: str) -> str:
     # Estimated amount (only if not null — never invent a number).
     if expected["estimated_amount"] is not None:
         parts.append(f"Tahmini hasar tutarı {expected['estimated_amount']} TL civarında.")
-
+    # Urgency cue (empty for normal).
+    cue = urgency_phrase(expected, dicts)
+    if cue:
+        parts.append(cue)
     return " ".join(parts)
 
 
@@ -194,7 +209,7 @@ def build_email(gt: dict, dicts: dict) -> tuple[str, str]:
 
     # Assemble the parts.
     opening = random.choice(dicts["openings"])
-    body = build_body(gt, damage_phrase, date_phrase)
+    body = build_body(gt, damage_phrase, date_phrase, dicts)
     closing = random.choice(dicts["closings"])
     signature = f"Saygılarımla,\n{personal['name']}\nTel: {personal['phone']}"
 
@@ -363,6 +378,10 @@ def build_transcript(gt: dict, dicts: dict) -> tuple[str, str]:
         )
 
     # Closing with personal info (masking material).
+    cue = urgency_phrase(expected, dicts)
+    if cue:
+        turns.append(f"Müşteri: {cue}")
+
     turns.append("Ajan: Son olarak ad soyad ve telefon alabilir miyim?")
     turns.append(f"Müşteri: {personal['name']}, {personal['phone']}.")
 
@@ -421,6 +440,9 @@ def build_form(gt: dict, dicts: dict) -> tuple[str, str]:
     # Damage: short label + free-text description (extraction's real work).
     lines.append(f"Hasar: {damage_phrase}")
     lines.append(f"Açıklama: {description}")
+    cue = urgency_phrase(expected, dicts)
+    if cue:
+        lines.append(f"Not: {cue}")
 
     # Injury: 10% blank, otherwise evet/hayır.
     if random.random() < 0.1:
@@ -441,6 +463,46 @@ def build_form(gt: dict, dicts: dict) -> tuple[str, str]:
     lines.append(f"Telefon: {personal['phone']}")
 
     return "\n".join(lines), description
+
+
+def build_info_request(gt: dict, dicts: dict) -> str:
+    """Build an info-request message: a question, not a claim.
+
+    The customer asks about coverage/process and identifies themselves
+    (name is masking material). No incident details.
+    """
+    personal = gt["_personal"]
+    question = random.choice(dicts["info_request_templates"])
+    opening = random.choice(
+        [
+            f"Merhaba, ben {personal['name']}.",
+            f"İyi günler, adım {personal['name']}.",
+            f"Merhaba, {personal['name']} ben.",
+        ]
+    )
+    parts = [opening, question]
+    # Some include a phone for callback.
+    if random.random() < 0.5:
+        parts.append(f"Bana {personal['phone']} numaradan ulaşabilirsiniz.")
+    return " ".join(parts)
+
+
+def build_irrelevant(gt: dict, dicts: dict) -> str:
+    """Build an off-topic message unrelated to insurance.
+
+    Still carries a name (masking material), but nothing else.
+    """
+    personal = gt["_personal"]
+    message = random.choice(dicts["irrelevant_templates"])
+    if random.random() < 0.5:
+        opening = random.choice(
+            [
+                f"Merhaba, ben {personal['name']}.",
+                f"İyi günler, {personal['name']} ben.",
+            ]
+        )
+        return f"{opening} {message}"
+    return message
 
 
 app = typer.Typer()
@@ -484,18 +546,22 @@ def generate(
             enriched_records.append(gt)
             continue
 
-        if channel == "email":
+        content_type = gt["expected"]["content_type"]
+        if content_type == "info_request":
+            text = build_info_request(gt, dicts)
+        elif content_type == "irrelevant":
+            text = build_irrelevant(gt, dicts)
+        elif channel == "email":
             text, damage_phrase = build_email(gt, dicts)
+            gt["expected"]["damage_description"] = damage_phrase
         elif channel == "call_transcript":
             text, damage_phrase = build_transcript(gt, dicts)
+            gt["expected"]["damage_description"] = damage_phrase
         else:  # web_form
             text, damage_phrase = build_form(gt, dicts)
-
+            gt["expected"]["damage_description"] = damage_phrase
         # Collect the text as one JSONL record.
         texts.append({"gt_id": gt["gt_id"], "channel": channel, "text": text})
-
-        # Fill in damage_description in the enriched ground truth.
-        gt["expected"]["damage_description"] = damage_phrase
         enriched_records.append(gt)
         written += 1
 

@@ -7,6 +7,20 @@ from typing import Annotated
 import typer
 from faker import Faker
 
+_DICT_DIR = Path("data/dictionaries")
+HOLDOUT_FIRST = [
+    n.strip()
+    for n in (_DICT_DIR / "holdout_first_names.txt").read_text(encoding="utf-8").splitlines()
+    if n.strip()
+]
+HOLDOUT_LAST = [
+    n.strip()
+    for n in (_DICT_DIR / "holdout_last_names.txt").read_text(encoding="utf-8").splitlines()
+    if n.strip()
+]
+
+
+
 # --- Enum values (must match schemas/claim.json) ---
 CHANNELS = ["email", "call_transcript", "web_form"]
 CONTENT_TYPES = ["claim", "info_request", "irrelevant"]
@@ -118,8 +132,16 @@ def make_personal() -> dict:
     prefix = random.choice(PHONE_PREFIXES)
     number = random.randint(1000000, 9999999)
     phone = f"0{prefix} {str(number)[:3]} {str(number)[3:]}"
+    if random.random() < 0.3:
+        name = f"{random.choice(HOLDOUT_FIRST)} {random.choice(HOLDOUT_LAST)}"
+        name_source = "holdout"
+    else:
+        name = f"{fake.first_name()} {fake.last_name()}"
+        name_source = "faker"
+
     return {
-        "name": f"{fake.first_name()} {fake.last_name()}",
+        "name": name,
+        "name_source": name_source,
         "phone": phone,
         "tc": str(random.randint(10000000000, 99999999999)),
     }
@@ -140,11 +162,14 @@ def build_one(index: int) -> dict:
 
     received = make_received_at()
 
-    # Injury forces urgency to critical (deterministic business rule).
-    urgency = random.choices(URGENCIES, weights=URGENCY_WEIGHTS)[0]
-    injury = urgency == "critical" and random.random() < 0.7
+    # Injury is decided first; injury forces critical (CLAUDE.md rule).
+    # Injury rate equals the locked critical rate (8%) so the frozen
+    # urgency distribution is preserved: every critical has an injury.
+    injury = random.random() < 0.08
     if injury:
         urgency = "critical"
+    else:
+        urgency = random.choices(["high", "normal"], weights=[0.30, 0.62])[0]
 
     damage_type = random.choice(DAMAGE_TYPES)
 
@@ -162,6 +187,30 @@ def build_one(index: int) -> dict:
         "counterparty_exists": (random.random() < 0.6 if damage_type == "collision" else False),
         "estimated_amount": (random.randint(1000, 100000) if random.random() > 0.15 else None),
     }
+
+    # Content type shapes which fields are present.
+    if content_type == "info_request":
+        # A question about coverage/process — no incident to report.
+        expected["plate"] = None
+        expected["incident_date"] = None
+        expected["incident_location"] = {"city": None, "district": None}
+        expected["damage_type"] = None
+        expected["injury"] = None
+        expected["counterparty_exists"] = None
+        expected["estimated_amount"] = None
+        expected["urgency"] = "normal"
+        # policy_no stays — they may reference their own policy.
+    elif content_type == "irrelevant":
+        # Off-topic — nothing insurance-related at all.
+        expected["policy_no"] = None
+        expected["plate"] = None
+        expected["incident_date"] = None
+        expected["incident_location"] = {"city": None, "district": None}
+        expected["damage_type"] = None
+        expected["injury"] = None
+        expected["counterparty_exists"] = None
+        expected["estimated_amount"] = None
+        expected["urgency"] = "normal"
 
     return {
         "gt_id": f"GT-{index:06d}",
