@@ -10,6 +10,14 @@ redis>=5.2
 python-dotenv>=1.0
 httpx>=0.28
 
+# Backend duo — JWT auth (S3-8)
+python-jose[cryptography]>=3.3
+passlib[bcrypt]>=1.7
+# passlib 1.7.4 (last release 2020) probes bcrypt.__about__.__version__ at
+# import time; bcrypt>=4.1 removed that attribute and passlib's hash() call
+# fails outright. Pin below the break until passlib cuts a new release.
+bcrypt<4.1,>=3.1
+
 # Data Engineer — synthetic data generation
 faker>=30
 dateparser>=1.2

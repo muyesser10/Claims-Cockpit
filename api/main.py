@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from api.routers import claims, ingest, queue, stats
+from api.routers import auth, claims, ingest, queue, stats
 
 app = FastAPI(title="Claims-Cockpit API", version="0.1.1")
 
@@ -15,6 +15,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(auth.router)
 app.include_router(ingest.router)
 app.include_router(claims.router)
 app.include_router(queue.router)
@@ -23,5 +24,7 @@ app.include_router(stats.router)
 
 @app.get("/health")
 def health():
-    """Liveness check. DB + Redis checks will be added in later sprints."""
+    """Liveness check, deliberately unauthenticated (load balancers, docker
+    healthcheck, etc. cannot carry a user JWT). DB + Redis checks will be
+    added in later sprints."""
     return {"status": "ok", "service": "api"}

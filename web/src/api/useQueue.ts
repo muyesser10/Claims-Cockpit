@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { authenticatedFetch } from "./auth";
 
 export type DamageType =
   | "collision"
@@ -64,7 +65,7 @@ interface QueueResponse {
 }
 
 async function fetchQueue(): Promise<QueueResponse> {
-  const res = await fetch("/api/queue");
+  const res = await authenticatedFetch("/api/queue");
   if (!res.ok) {
     throw new Error(`Failed to fetch queue: ${res.status}`);
   }
@@ -86,7 +87,7 @@ export function useQueue() {
 export type ClaimEdits = Record<string, unknown>;
 
 async function approveClaim(id: number, edits?: ClaimEdits): Promise<Claim> {
-  const res = await fetch(`/api/queue/${id}/approve`, {
+  const res = await authenticatedFetch(`/api/queue/${id}/approve`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(edits && Object.keys(edits).length > 0 ? { edits } : {}),
@@ -98,7 +99,7 @@ async function approveClaim(id: number, edits?: ClaimEdits): Promise<Claim> {
 }
 
 async function rejectClaim(id: number): Promise<Claim> {
-  const res = await fetch(`/api/queue/${id}/reject`, { method: "POST" });
+  const res = await authenticatedFetch(`/api/queue/${id}/reject`, { method: "POST" });
   if (!res.ok) {
     throw new Error(`Failed to reject claim: ${res.status}`);
   }

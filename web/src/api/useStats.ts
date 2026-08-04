@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { authenticatedFetch } from "./auth";
 
 interface StatsResponse {
   urgency_counts: Record<string, number>;
@@ -7,7 +8,7 @@ interface StatsResponse {
 }
 
 async function fetchStats(): Promise<StatsResponse> {
-  const res = await fetch("/api/istatistik/ozet");
+  const res = await authenticatedFetch("/api/istatistik/ozet");
   if (!res.ok) {
     throw new Error(`Failed to fetch stats: ${res.status}`);
   }

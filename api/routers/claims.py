@@ -4,7 +4,8 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from api.database import get_db
-from api.models.db import Claim
+from api.dependencies import get_current_user
+from api.models.db import Claim, User
 from api.models.schemas import ClaimListOut, ClaimOut
 
 router = APIRouter(prefix="/claims", tags=["claims"])
@@ -17,6 +18,7 @@ def list_claims(
     offset: int = Query(0, ge=0),
     status: str | None = None,
     urgency: str | None = None,
+    _user: User = Depends(get_current_user),
 ):
     """List claims, newest first. Filterable by status and urgency."""
     stmt = select(Claim).order_by(Claim.created_at.desc())
@@ -35,7 +37,9 @@ def list_claims(
 
 
 @router.get("/{claim_id}", response_model=ClaimOut)
-def get_claim(claim_id: int, db: Session = Depends(get_db)):
+def get_claim(
+    claim_id: int, db: Session = Depends(get_db), _user: User = Depends(get_current_user)
+):
     claim = db.get(Claim, claim_id)
     if not claim:
         raise HTTPException(status_code=404, detail="Claim not found")

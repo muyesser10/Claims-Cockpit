@@ -6,14 +6,15 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from api.database import get_db
-from api.models.db import Claim
+from api.dependencies import get_current_user
+from api.models.db import Claim, User
 from api.models.schemas import StatsOut
 
 router = APIRouter(prefix="/istatistik", tags=["istatistik"])
 
 
 @router.get("/ozet", response_model=StatsOut)
-def get_ozet(db: Session = Depends(get_db)):
+def get_ozet(db: Session = Depends(get_db), _user: User = Depends(get_current_user)):
     """Counts for sayaç kartları, aciliyet donut, and il barı."""
     urgency_rows = db.execute(select(Claim.urgency, func.count()).group_by(Claim.urgency)).all()
     status_rows = db.execute(select(Claim.status, func.count()).group_by(Claim.status)).all()
