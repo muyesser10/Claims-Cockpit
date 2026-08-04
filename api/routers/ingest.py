@@ -9,6 +9,12 @@ from api.redis_client import enqueue_message
 
 router = APIRouter(prefix="/ingest", tags=["ingest"])
 
+# NOT (S3-8): kasıtlı olarak JWT korumasız bırakıldı. Bu uç, e-posta/çağrı
+# merkezi/web form entegrasyonlarından gelen servis-to-servis trafiği alıyor
+# — kullanıcı oturumu yok, bu yüzden operatör JWT'si burada uygun bir model
+# değil. İleride bir API key / servis kimlik doğrulaması eklenecek; S3-8
+# kapsamı dışında.
+
 
 @router.post("", response_model=IngestResponse, status_code=202)
 def ingest(payload: IngestRequest, db: Session = Depends(get_db)):

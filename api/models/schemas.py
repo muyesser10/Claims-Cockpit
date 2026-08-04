@@ -49,3 +49,13 @@ class StatsOut(BaseModel):
     urgency_counts: dict[str, int]
     status_counts: dict[str, int]
     city_counts: dict[str, int]
+
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
