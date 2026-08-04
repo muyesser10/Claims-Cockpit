@@ -76,6 +76,35 @@ the data or the prompt changes materially.
 uses — Text-to-SQL and RAG answers. Neither has been measured; this update
 speaks only for extraction.
 
+## Update — 2026-08-04: one tier, and Text-to-SQL is on it
+
+The update above moved extraction to the cheap tier on evidence. This one moves
+everything else there without any, and says so plainly.
+
+`gpt-4o-mini` is now the model for the whole project: extraction, Text-to-SQL and
+RAG answers. `ModelTier.STRONG` stays in `worker/llm/client.py` and every caller
+keeps its `tier` parameter, but nothing passes STRONG any more.
+
+For extraction that is a measured decision — 99.4% over 100 records. For
+Text-to-SQL it is not: **no measurement exists.** The choice rests on cost and on
+the expectation that these questions are simple aggregates over a fifteen-column
+view. It is recorded as a preference rather than a finding, the same way ADR-002
+records its own weak evidence.
+
+This contradicts design doc §7.1, which puts Text-to-SQL on the strong tier
+because "doğru SQL kritik". The concern behind that line is real and remains
+unaddressed here: a wrong query does not fail loudly, it returns a plausible
+wrong number.
+
+**What would settle it:** the 40-question RAG set (design doc §7.4) run against
+both tiers on the same questions, scored by execution accuracy. A smaller run was
+considered on 2026-08-04 and dropped — there is no Postgres on the LLM engineer's
+machine, and standing one up to compare twenty questions was judged more expensive
+than the evidence it would buy. Until that run exists, this section is a decision,
+not a result.
+
+Reverting costs one argument at the call site: `tier=ModelTier.STRONG`.
+
 ## Alternatives considered
 
 | Alternative | Pro | Con |
