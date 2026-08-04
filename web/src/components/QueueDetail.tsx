@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from "react";
+import SourceHighlight from "./SourceHighlight";
 import type {
   Claim,
   ClaimEdits,
@@ -107,16 +108,22 @@ function FieldWrapper({
   label,
   field,
   flags,
+  onActivate,
   children,
 }: {
   label: string;
   field: string;
   flags: ValidationFlag[];
+  onActivate: (field: string | null) => void;
   children: ReactNode;
 }) {
   const fieldFlags = flags.filter((flag) => flag.field === field);
   return (
-    <div className="mb-3">
+    <div
+      className="mb-3"
+      onFocus={() => onActivate(field)}
+      onBlur={() => onActivate(null)}
+    >
       <label className="block text-xs font-medium text-slate-600 mb-1">{label}</label>
       {children}
       {fieldFlags.length > 0 && (
@@ -146,6 +153,7 @@ export default function QueueDetail({
     extraction ? toFormState(extraction) : EMPTY_FORM,
   );
   const [confirmingReject, setConfirmingReject] = useState(false);
+  const [activeField, setActiveField] = useState<string | null>(null);
 
   function update<K extends keyof FormState>(field: K, value: FormState[K]) {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -192,9 +200,11 @@ export default function QueueDetail({
       </div>
 
       <div className="mb-4 p-2 rounded bg-slate-50 text-xs text-slate-500 max-h-24 overflow-y-auto">
-        {claim.data.masked_text}
-      </div>
-
+  <SourceHighlight
+    text={claim.data.masked_text}
+    activeRef={activeField ? extraction?.source_references[activeField] : null}
+  />
+</div>
       <div className="mb-4">
         {flags.length === 0 ? (
           <p className="text-sm text-green-700">Doğrulama uyarısı yok.</p>
@@ -218,21 +228,21 @@ export default function QueueDetail({
         <p className="text-sm text-red-600 mb-4">Çıkarım yapılamadı (extraction hatası).</p>
       ) : (
         <div className="mb-4">
-          <FieldWrapper label="Poliçe No" field="policy_no" flags={flags}>
+          <FieldWrapper label="Poliçe No" field="policy_no" flags={flags} onActivate={setActiveField}>
             <input
               className={inputClass}
               value={form.policy_no}
               onChange={(e) => update("policy_no", e.target.value)}
             />
           </FieldWrapper>
-          <FieldWrapper label="Plaka" field="plate" flags={flags}>
+          <FieldWrapper label="Plaka" field="plate" flags={flags} onActivate={setActiveField}>
             <input
               className={inputClass}
               value={form.plate}
               onChange={(e) => update("plate", e.target.value)}
             />
           </FieldWrapper>
-          <FieldWrapper label="Olay Tarihi" field="incident_date" flags={flags}>
+          <FieldWrapper label="Olay Tarihi" field="incident_date" flags={flags} onActivate={setActiveField}>
             <input
               type="date"
               className={inputClass}
@@ -240,7 +250,7 @@ export default function QueueDetail({
               onChange={(e) => update("incident_date", e.target.value)}
             />
           </FieldWrapper>
-          <FieldWrapper label="Hasar Türü" field="damage_type" flags={flags}>
+          <FieldWrapper label="Hasar Türü" field="damage_type" flags={flags} onActivate={setActiveField}>
             <select
               className={inputClass}
               value={form.damage_type}
@@ -254,7 +264,7 @@ export default function QueueDetail({
               ))}
             </select>
           </FieldWrapper>
-          <FieldWrapper label="Yaralanma" field="injury" flags={flags}>
+          <FieldWrapper label="Yaralanma" field="injury" flags={flags} onActivate={setActiveField}>
             <select
               className={inputClass}
               value={form.injury}
@@ -265,7 +275,7 @@ export default function QueueDetail({
               <option value="false">Hayır</option>
             </select>
           </FieldWrapper>
-          <FieldWrapper label="Karşı Taraf Var mı" field="counterparty_exists" flags={flags}>
+          <FieldWrapper label="Karşı Taraf Var mı" field="counterparty_exists" flags={flags} onActivate={setActiveField}>
             <select
               className={inputClass}
               value={form.counterparty_exists}
@@ -276,7 +286,7 @@ export default function QueueDetail({
               <option value="false">Hayır</option>
             </select>
           </FieldWrapper>
-          <FieldWrapper label="Tahmini Tutar" field="estimated_amount" flags={flags}>
+          <FieldWrapper label="Tahmini Tutar" field="estimated_amount" flags={flags} onActivate={setActiveField}>
             <input
               type="number"
               className={inputClass}
@@ -284,7 +294,7 @@ export default function QueueDetail({
               onChange={(e) => update("estimated_amount", e.target.value)}
             />
           </FieldWrapper>
-          <FieldWrapper label="Hasar Açıklaması" field="damage_description" flags={flags}>
+          <FieldWrapper label="Hasar Açıklaması" field="damage_description" flags={flags} onActivate={setActiveField}>
             <textarea
               className={inputClass}
               rows={2}
@@ -292,14 +302,14 @@ export default function QueueDetail({
               onChange={(e) => update("damage_description", e.target.value)}
             />
           </FieldWrapper>
-          <FieldWrapper label="İl" field="incident_location.city" flags={flags}>
+          <FieldWrapper label="İl" field="incident_location.city" flags={flags} onActivate={setActiveField}>
             <input
               className={inputClass}
               value={form.city}
               onChange={(e) => update("city", e.target.value)}
             />
           </FieldWrapper>
-          <FieldWrapper label="İlçe" field="incident_location.district" flags={flags}>
+          <FieldWrapper label="İlçe" field="incident_location.district" flags={flags} onActivate={setActiveField}>
             <input
               className={inputClass}
               value={form.district}
