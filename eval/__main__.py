@@ -9,8 +9,8 @@
 prints the sample it is about to buy before it starts.
 
 `--run` without `--mix` uses the pinned baseline sample
-(eval/fixtures/baseline_100_ids.json), which is what keeps a run comparable with
-the 2026-08-02 baseline. `--mix` draws a fresh random sample instead — for a
+(eval/fixtures/baseline_100_ids.json), which is what keeps successive runs
+comparable with each other. `--mix` draws a fresh random sample instead — for a
 smoke test, not for a measurement anyone intends to compare.
 """
 

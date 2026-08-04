@@ -11,6 +11,7 @@ relative dates, so the loader reads it from there. Recorded rather than worked
 around: moving the field is @muyesser10's call.
 """
 
+import hashlib
 import json
 import random
 from dataclasses import dataclass
@@ -22,9 +23,9 @@ TEXTS_PATH = REPO_ROOT / "data" / "texts.jsonl"
 GROUND_TRUTH_PATH = REPO_ROOT / "data" / "ground_truth_enriched.jsonl"
 BASELINE_IDS_PATH = Path(__file__).resolve().parent / "fixtures" / "baseline_100_ids.json"
 
-# The channel mix of the 2026-08-02 baseline run. Holding it fixed is what makes
-# a later number comparable with that one; a run with a different mix is a
-# different measurement, not a better or worse one.
+# The channel mix of the baseline run. Holding it fixed is what makes a later
+# number comparable with that one; a run with a different mix is a different
+# measurement, not a better or worse one.
 BASELINE_CHANNEL_MIX = {"email": 50, "call_transcript": 30, "web_form": 20}
 
 
@@ -101,15 +102,48 @@ def load_records(
     return records
 
 
-def baseline_ids(path: Path = BASELINE_IDS_PATH) -> list[str]:
-    """The 100 records the 2026-08-02 extraction baseline measured.
+def _sha256(path: Path) -> str:
+    """The file's digest, read in blocks so a large corpus never sits in memory."""
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for block in iter(lambda: handle.read(65536), b""):
+            digest.update(block)
+    return digest.hexdigest()
 
-    Pinned rather than resampled. `sample(seed=42)` draws a different hundred —
-    7 in common — and comparing a run with the baseline across two different
-    samples buries a real change under sampling luck. Every later run reuses
-    these, so the comparison stays paired for as long as the corpus holds.
+
+def corpus_fingerprint(
+    texts_path: Path = TEXTS_PATH,
+    ground_truth_path: Path = GROUND_TRUTH_PATH,
+) -> dict[str, str]:
+    """A digest of both corpus files, pinned alongside the baseline sample.
+
+    The point is to catch a regenerated corpus by name rather than by inference.
+    The 2026-08-04 rebuild (PR #44) kept every gt_id and replaced the text behind
+    them; the channel-mix check noticed only because the mix happened to move as
+    well. A rebuild that preserved the mix would have gone through in silence,
+    and every number measured afterwards would have been compared against a
+    baseline that no longer described the same records.
     """
-    return json.loads(path.read_text(encoding="utf-8"))["gt_ids"]
+    return {
+        "texts_sha256": _sha256(texts_path),
+        "ground_truth_sha256": _sha256(ground_truth_path),
+    }
+
+
+def baseline_fixture(path: Path = BASELINE_IDS_PATH) -> dict:
+    """The whole pinned-sample file: ids, channel mix and corpus fingerprint."""
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def baseline_ids(path: Path = BASELINE_IDS_PATH) -> list[str]:
+    """The 100 records the current extraction baseline measured.
+
+    Pinned rather than resampled. `sample()` draws a different hundred each time
+    the pool changes, and comparing two runs across two samples buries a real
+    change under sampling luck. Every later run reuses these, for as long as
+    `corpus_fingerprint()` still matches what is pinned beside them.
+    """
+    return baseline_fixture(path)["gt_ids"]
 
 
 def select(records: list[EvalRecord], gt_ids: list[str]) -> list[EvalRecord]:
