@@ -5,6 +5,8 @@ import random
 from data.text_generator import (
     build_email,
     build_form,
+    build_info_request,
+    build_irrelevant,
     build_transcript,
     load_dictionaries,
 )
@@ -125,3 +127,48 @@ def test_form_null_amount_not_in_text():
     gt = _sample_gt({"estimated_amount": None})
     text, _ = build_form(gt, dicts)
     assert "Tahmini Hasar:" not in text
+
+
+def test_info_request_is_a_question_not_a_claim():
+    """info_request text carries a name and a question, no incident details."""
+    random.seed(42)
+    dicts = load_dictionaries()
+    gt = _sample_gt({"content_type": "info_request"})
+    text = build_info_request(gt, dicts)
+    assert gt["_personal"]["name"] in text
+    # Question comes from the info_request pool.
+    assert any(q in text for q in dicts["info_request_templates"])
+    # No claim artifacts like a plate or policy line.
+    assert "plakalı" not in text
+
+
+def test_irrelevant_is_off_topic():
+    """irrelevant text is one of the off-topic messages."""
+    random.seed(42)
+    dicts = load_dictionaries()
+    gt = _sample_gt({"content_type": "irrelevant"})
+    text = build_irrelevant(gt, dicts)
+    assert any(m in text for m in dicts["irrelevant_templates"])
+
+
+def test_urgency_cue_present_for_high_absent_for_normal():
+    """High/critical claims get an urgency cue; normal ones don't."""
+    random.seed(42)
+    dicts = load_dictionaries()
+    high_cues = dicts["urgency_phrases"]["high"] + dicts["urgency_phrases"]["critical"]
+
+    gt_high = _sample_gt({"urgency": "high"})
+    text_high, _ = build_email(gt_high, dicts)
+    assert any(c in text_high for c in high_cues)
+
+    gt_normal = _sample_gt({"urgency": "normal"})
+    text_normal, _ = build_email(gt_normal, dicts)
+    assert not any(c in text_normal for c in high_cues)
+
+
+def test_urgency_phrase_empty_for_normal():
+    """The urgency helper returns empty string for normal urgency."""
+    from data.text_generator import urgency_phrase
+
+    dicts = load_dictionaries()
+    assert urgency_phrase({"urgency": "normal"}, dicts) == ""

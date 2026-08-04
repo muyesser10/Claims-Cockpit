@@ -1,0 +1,16 @@
+{
+  "critical": [
+    "Durum acil, araçta yaralı var, lütfen en kısa sürede dönün.",
+    "Acil yardım gerekiyor, yaralı olduğu için ivedilikle ilgilenmenizi rica ediyorum.",
+    "Çok acil, yaralanma söz konusu, hemen aranmam gerekiyor.",
+    "Acilen dönüş yapmanızı istirham ediyorum, yaralı durumu var."
+  ],
+  "high": [
+    "Araç çekilemez durumda, bir an önce ilgilenmenizi rica ederim.",
+    "Durum acil sayılır, aracı kullanamıyorum, yolda kaldım.",
+    "En kısa sürede dönüş yaparsanız sevinirim, araç hareket edemiyor.",
+    "Aracım yolda kaldı, ivedilikle yardımcı olabilir misiniz.",
+    "Biraz acele etmem gerekiyor, araç kullanılamaz halde."
+  ],
+  "normal": []
+}
