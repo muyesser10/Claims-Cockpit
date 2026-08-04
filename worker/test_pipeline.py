@@ -13,10 +13,11 @@ import pytest
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
 
+import worker.masking.sanity as sanity_module
 import worker.pipeline as pipeline_module
 from api.models.db import AuditTrail, Base, Claim, RawMessage
 from worker.extraction.extractor import ExtractionResult
-from worker.masking.sanity import SanityCheckResult
+from worker.masking.sanity import SanityCheckResult, SanityFlag
 
 engine = create_engine(
     "sqlite:///:memory:",
@@ -92,7 +93,9 @@ def test_sanity_leak_skips_extraction(db, monkeypatch):
     monkeypatch.setattr(
         pipeline_module,
         "check_sanity",
-        lambda *a, **k: SanityCheckResult(leak_found=True, flagged_snippets=["Zülfikar Bey"]),
+        lambda *a, **k: SanityCheckResult(
+            leak_found=True, flags=[SanityFlag(kind="name", span=(0, 5))]
+        ),
     )
     extract_mock = MagicMock()
     monkeypatch.setattr(pipeline_module, "extract", extract_mock)
@@ -105,8 +108,86 @@ def test_sanity_leak_skips_extraction(db, monkeypatch):
     claim = db.execute(select(Claim).where(Claim.raw_message_id == msg.id)).scalar_one()
     assert "extraction" not in claim.data
     assert claim.data["masking_sanity_flags"] == [
-        {"rule": "possible_pii_leak", "message": "Zülfikar Bey"}
+        {"rule": "possible_pii_leak", "kind": "name", "span": [0, 5]}
     ]
+
+    audit = db.execute(
+        select(AuditTrail).where(
+            AuditTrail.claim_id == claim.id, AuditTrail.step == "extraction_skipped"
+        )
+    ).scalar_one()
+    assert audit.detail == {"reason": "masking_sanity_flag"}
+
+
+def test_sanity_leaked_text_never_persisted_to_db(db, monkeypatch):
+    """Regression for the bug caught in review: the raw PII text sanity spots
+    must never land in the masking_sanity audit row or masking_sanity_flags —
+    only kind + span. (masked_text itself is a separate, pre-existing field
+    that legitimately holds whatever masking left behind; this test is scoped
+    to the sanity-derived fields the bug was actually in.)
+    """
+    monkeypatch.setenv("MASKING_SANITY_ENABLED", "true")
+    leaked_name = "Zülfikar Bey"
+    monkeypatch.setattr(
+        pipeline_module,
+        "check_sanity",
+        lambda *a, **k: SanityCheckResult(
+            leak_found=True, flags=[SanityFlag(kind="name", span=(0, 5))]
+        ),
+    )
+    monkeypatch.setattr(pipeline_module, "extract", MagicMock())
+
+    msg = _make_raw_message(db, text=f"Karşı taraftaki sürücü {leaked_name}'di.")
+    pipeline_module.process_message(db, msg.id)
+
+    claim = db.execute(select(Claim).where(Claim.raw_message_id == msg.id)).scalar_one()
+    sanity_audit = db.execute(
+        select(AuditTrail).where(
+            AuditTrail.raw_message_id == msg.id, AuditTrail.step == "masking_sanity"
+        )
+    ).scalar_one()
+
+    import json
+
+    assert leaked_name not in json.dumps(claim.data["masking_sanity_flags"])
+    assert leaked_name not in json.dumps(sanity_audit.detail)
+
+
+class _RaisingLlmClientClass:
+    """Stands in for the LlmClient *class*: raises on construction, like
+    load_settings() does when OPENAI_API_KEY is unset."""
+
+    def __init__(self, *args, **kwargs) -> None:
+        raise RuntimeError("OPENAI_API_KEY is not set. Copy .env.example to .env and fill it in.")
+
+
+def test_sanity_real_fail_closed_path_skips_extraction(db, monkeypatch):
+    """End-to-end proof for the fix: run the REAL check_sanity() (not a
+    mocked SanityCheckResult) through a client-construction failure — the
+    exact failure mode a missing OPENAI_API_KEY produces in production — and
+    confirm the pipeline still routes to human review with extraction
+    skipped, instead of the pipeline crashing (old bug #1) or extraction
+    running anyway because flags came back empty (old bug #2).
+    """
+    monkeypatch.setenv("MASKING_SANITY_ENABLED", "true")
+    monkeypatch.setattr(sanity_module, "LlmClient", _RaisingLlmClientClass)
+    # pipeline_module.check_sanity is NOT mocked here — the real function runs.
+    extract_mock = MagicMock()
+    monkeypatch.setattr(pipeline_module, "extract", extract_mock)
+
+    msg = _make_raw_message(db)
+    pipeline_module.process_message(db, msg.id)
+
+    # The message must not have crashed the pipeline into dead_letter.
+    assert msg.status != "dead_letter"
+
+    extract_mock.assert_not_called()
+
+    claim = db.execute(select(Claim).where(Claim.raw_message_id == msg.id)).scalar_one()
+    assert claim.status == "in_human_review"
+    assert "extraction" not in claim.data
+    assert claim.data["masking_sanity_flags"] != []
+    assert claim.data["masking_sanity_flags"][0]["kind"] == "other"
 
     audit = db.execute(
         select(AuditTrail).where(

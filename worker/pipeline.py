@@ -71,12 +71,21 @@ def step_mask(db: Session, msg: RawMessage) -> str:
 
 
 def _sanity_result_to_flags(result: SanityCheckResult) -> list[dict]:
-    """SanityCheckResult -> the flag shape claim.data.masking_sanity_flags uses,
-    same {"rule", "message"} style as validation_flags."""
+    """SanityCheckResult -> the flag shape claim.data.masking_sanity_flags uses.
+
+    Only `kind` and `span` ever land here — never the leaked text itself.
+    See worker/masking/sanity.py's module docstring: an earlier version
+    put the raw snippet in this list, undoing what masking exists to do.
+    """
     if not result.leak_found:
         return []
     return [
-        {"rule": "possible_pii_leak", "message": snippet} for snippet in result.flagged_snippets
+        {
+            "rule": "possible_pii_leak",
+            "kind": str(flag.kind),
+            "span": list(flag.span) if flag.span else None,
+        }
+        for flag in result.flags
     ]
 
 
@@ -105,7 +114,9 @@ def step_mask_sanity(db: Session, msg: RawMessage, masked_text: str) -> SanityCh
         raw_message_id=msg.id,
         detail={
             "leak_found": result.leak_found,
-            "flagged_snippets": result.flagged_snippets,
+            # kind + span only — never the leaked text itself, see
+            # worker/masking/sanity.py's module docstring.
+            "flags": _sanity_result_to_flags(result),
             "enabled": enabled,
         },
         provider="openai" if enabled else None,
