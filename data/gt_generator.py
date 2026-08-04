@@ -20,7 +20,6 @@ HOLDOUT_LAST = [
 ]
 
 
-
 # --- Enum values (must match schemas/claim.json) ---
 CHANNELS = ["email", "call_transcript", "web_form"]
 CONTENT_TYPES = ["claim", "info_request", "irrelevant"]
