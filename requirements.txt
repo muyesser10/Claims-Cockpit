@@ -29,5 +29,8 @@ openai>=1.50
 instructor>=1.5
 structlog>=24.1
 
+# Backend duo — Prometheus + Grafana observability (S3-9)
+prometheus-client>=0.20
+prometheus-fastapi-instrumentator>=7.0
 # LLM Engineer — local embeddings (ADR-002). Pulls torch; grows the worker image.
 sentence-transformers>=5.0

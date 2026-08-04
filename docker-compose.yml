@@ -48,7 +48,7 @@ services:
 
   # 5. WORKER  (AI Pipeline & Observability)
   worker:
-    build: 
+    build:
       context: .
       dockerfile: worker/Dockerfile
     container_name: claims_worker
@@ -56,13 +56,14 @@ services:
       - .env
     environment:
       - OLLAMA_HOST=http://ollama:11434
+    ports: ["9100:9100"]  # prometheus_client.start_http_server — worker/metrics.py
     depends_on:
       - db
       - redis
       - ollama
     restart: always
 
-  # 6. WEB 
+  # 6. WEB
   web:
     build:
       context: ./web
@@ -73,10 +74,34 @@ services:
     environment:
       - VITE_API_URL=http://localhost:8000
     volumes:
-      - ./web:/app        
-      - /app/node_modules   
+      - ./web:/app
+      - /app/node_modules
     depends_on:
       - api
+
+  # 7. PROMETHEUS + GRAFANA  (S3-9 observability)
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: claims_prometheus
+    ports: ["9090:9090"]
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+    depends_on:
+      - api
+      - worker
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: claims_grafana
+    ports: ["3000:3000"]
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning
+      - ./monitoring/grafana/dashboards:/etc/grafana/dashboards
+    depends_on:
+      - api
+      - worker
 
 volumes:
   db_data:

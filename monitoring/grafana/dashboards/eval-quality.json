@@ -1,0 +1,22 @@
+{
+  "uid": "claims-cockpit-eval-quality",
+  "title": "Claims-Cockpit — Eval Quality (placeholder)",
+  "tags": ["claims-cockpit", "s3-9", "todo"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "",
+  "time": { "from": "now-6h", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "title": "TODO",
+      "type": "text",
+      "gridPos": { "x": 0, "y": 0, "w": 24, "h": 6 },
+      "options": {
+        "mode": "markdown",
+        "content": "**Bekliyor: @MehmetTayyip'in eval metrik export'u.**\n\nBu panel S3-9 kapsamında sadece yer tutucu olarak eklendi — gerçek bir Prometheus sorgusu içermiyor. `eval/` altındaki alan doğruluğu, halüsinasyon oranı, kritik recall gibi metriklerin bir `/metrics` endpoint'i (veya Pushgateway) üzerinden export edilmesi Data Scientist tarafında ayrı bir iş olarak bekliyor. Export hazır olduğunda buraya gerçek panel(ler) eklenecek."
+      }
+    }
+  ]
+}
