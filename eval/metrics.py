@@ -19,6 +19,15 @@ from dataclasses import dataclass, field
 from eval.normalize import COMPARED_FIELDS
 from eval.scoring import MISSING_METRIC_FIELDS, RecordScore
 
+# Fields that moved between two identical runs - same prompt, same seed, same
+# sample, same model - measured 2026-08-04 over the pinned 100-record sample:
+# three on counterparty_exists, one on incident_date (a relative date resolved
+# one day either side of a month boundary). The note this file used to carry
+# said "about a field", which was the resolution of the measurement, 1/800, not
+# its repeatability. Measured from a single repeat, so it is a floor rather than
+# a bound; more repeats can only widen it.
+REPEAT_DRIFT_FIELDS = 4
+
 
 @dataclass(frozen=True)
 class Ratio:
@@ -91,13 +100,14 @@ class Report:
 
     @property
     def noise_floor(self) -> float:
-        """One field either way, as a share of the total compared.
+        """How far a repeated run drifts, as a share of the fields compared.
 
-        Measured 2026-08-02: with temperature 0 and a pinned seed, a repeated
-        run still moves by about a field. Differences below this are not
-        results, and the report prints it next to the accuracy for that reason.
+        A difference smaller than this is not a result, which is why the report
+        prints it beside the accuracy. See REPEAT_DRIFT_FIELDS for where the
+        number comes from and how much weight it carries.
         """
-        return 1 / self.field_accuracy.total if self.field_accuracy.total else 0.0
+        total = self.field_accuracy.total
+        return REPEAT_DRIFT_FIELDS / total if total else 0.0
 
 
 def build_report(scores: list[RecordScore]) -> Report:
@@ -183,7 +193,8 @@ def format_report(report: Report, *, max_misses: int = 20) -> str:
         f"records            {report.records}",
         f"field accuracy     {report.field_accuracy}   target >= 82%",
         f"unsupported values {report.unsupported}   target <= 7%",
-        f"noise floor        +/-{report.noise_floor:.2%} (one field)",
+        f"noise floor        +/-{report.noise_floor:.2%} "
+        f"({REPEAT_DRIFT_FIELDS} fields, one repeat)",
         "",
         "per channel",
     ]

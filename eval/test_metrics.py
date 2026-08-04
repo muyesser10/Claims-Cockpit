@@ -1,7 +1,7 @@
 # eval/test_metrics.py
 """Tests for metric aggregation."""
 
-from eval.metrics import Ratio, build_report, format_report
+from eval.metrics import REPEAT_DRIFT_FIELDS, Ratio, build_report, format_report
 from eval.scoring import FieldScore, RecordScore
 
 
@@ -46,10 +46,10 @@ def test_field_accuracy_totals_every_compared_field():
     assert report.field_accuracy == Ratio(15, 16)
 
 
-def test_noise_floor_is_one_field_of_the_total():
+def test_noise_floor_is_the_measured_repeat_drift():
     report = build_report([make_score() for _ in range(100)])
     assert report.field_accuracy.total == 800
-    assert report.noise_floor == 1 / 800
+    assert report.noise_floor == REPEAT_DRIFT_FIELDS / 800
 
 
 def test_per_channel_breakdown_splits_the_total():
