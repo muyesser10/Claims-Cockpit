@@ -3,8 +3,15 @@ import os
 import time
 
 import redis
+from prometheus_client import start_http_server
 
 from api.database import SessionLocal
+from worker.metrics import (
+    worker_messages_failed_total,
+    worker_messages_processed_total,
+    worker_processing_duration_seconds,
+    worker_queue_depth,
+)
 from worker.pipeline import process_message
 
 logging.basicConfig(
@@ -15,6 +22,7 @@ logger = logging.getLogger("worker.main")
 
 REDIS_URL = os.environ["REDIS_URL"]  # Read from the same source as api/redis_client.py
 QUEUE_KEY = "claims:incoming"
+METRICS_PORT = 9100
 
 
 def get_redis_client() -> redis.Redis:
@@ -36,11 +44,17 @@ def get_redis_client() -> redis.Redis:
 
 def main():
     logger.info("Starting Worker (S1-5)...")
+    start_http_server(METRICS_PORT)
+    logger.info(f"Metrics server listening on :{METRICS_PORT}/metrics")
     r = get_redis_client()
     logger.info(f"Listening to queue '{QUEUE_KEY}'...")
 
     while True:
         try:
+            # Cheap; sampled every tick so worker_queue_depth reflects
+            # backlog even during a long BRPOP wait (up to the 5s timeout).
+            worker_queue_depth.set(r.llen(QUEUE_KEY))
+
             item = r.brpop(QUEUE_KEY, timeout=5)
             if item is None:
                 continue  # timeout
@@ -53,9 +67,15 @@ def main():
                 continue
 
             db = SessionLocal()
+            started = time.perf_counter()
             try:
                 process_message(db, raw_message_id)
+                worker_messages_processed_total.inc()
+            except Exception:
+                worker_messages_failed_total.inc()
+                raise
             finally:
+                worker_processing_duration_seconds.observe(time.perf_counter() - started)
                 db.close()
 
         except redis.ConnectionError:

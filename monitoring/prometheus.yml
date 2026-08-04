@@ -1,0 +1,20 @@
+# monitoring/prometheus.yml
+# S3-9 — scrape targets for the api (auto HTTP metrics + custom queue
+# gauges, both under GET /metrics) and worker (prometheus_client
+# start_http_server on :9100) services. Service names resolve via the
+# default docker-compose network, same as every other inter-service call
+# in this repo (e.g. DATABASE_URL uses `db`, not localhost).
+
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: "claims-cockpit-api"
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["api:8000"]
+
+  - job_name: "claims-cockpit-worker"
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["worker:9100"]

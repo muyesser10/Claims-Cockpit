@@ -1,0 +1,15 @@
+# monitoring/grafana/provisioning/datasources/prometheus.yml
+# S3-9 — auto-registers Prometheus as Grafana's default datasource on
+# container start, so a fresh `docker compose up` needs zero manual
+# click-through in the Grafana UI.
+
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    type: prometheus
+    uid: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    editable: true
