@@ -1,53 +1,16 @@
 # api/routers/test_queue.py
-"""Tests for the queue router: GET /queue, approve, reject."""
+"""Tests for the queue router: GET /queue, approve, reject.
+
+Fixtures (client, db_session, auth_headers, ...) come from api/conftest.py —
+this file no longer sets up its own engine/TestClient/dependency override.
+"""
 
 from datetime import UTC, datetime, timedelta
 
-import pytest
-from fastapi.testclient import TestClient
-from sqlalchemy import create_engine, select
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
+from sqlalchemy import select
 
-from api.database import get_db
-from api.main import app
-from api.models.db import AuditTrail, Base, Claim
-
-engine = create_engine(
-    "sqlite:///:memory:",
-    connect_args={"check_same_thread": False},
-    poolclass=StaticPool,
-)
-TestingSessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
-
-
-def _override_get_db():
-    db = TestingSessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-
-
-app.dependency_overrides[get_db] = _override_get_db
-
-client = TestClient(app)
-
-
-@pytest.fixture(autouse=True)
-def _fresh_db():
-    Base.metadata.create_all(bind=engine)
-    yield
-    Base.metadata.drop_all(bind=engine)
-
-
-@pytest.fixture
-def db_session():
-    db = TestingSessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+from api.models.db import AuditTrail, Claim, User
+from api.security import create_access_token, hash_password
 
 
 def _make_claim(db_session, *, status="in_human_review", urgency="normal", created_at=None):
@@ -69,12 +32,12 @@ def _make_claim(db_session, *, status="in_human_review", urgency="normal", creat
 # --- GET /queue --------------------------------------------------------------
 
 
-def test_list_queue_only_returns_in_human_review(db_session):
+def test_list_queue_only_returns_in_human_review(client, db_session, auth_headers):
     in_review = _make_claim(db_session, status="in_human_review")
     _make_claim(db_session, status="approved")
     _make_claim(db_session, status="archived")
 
-    response = client.get("/queue")
+    response = client.get("/queue", headers=auth_headers)
 
     assert response.status_code == 200
     body = response.json()
@@ -83,45 +46,53 @@ def test_list_queue_only_returns_in_human_review(db_session):
     assert body["total"] == 1
 
 
-def test_list_queue_orders_critical_first(db_session):
+def test_list_queue_orders_critical_first(client, db_session, auth_headers):
     now = datetime.now(UTC)
     normal = _make_claim(db_session, urgency="normal", created_at=now - timedelta(minutes=5))
     critical = _make_claim(db_session, urgency="critical", created_at=now - timedelta(minutes=1))
     high = _make_claim(db_session, urgency="high", created_at=now - timedelta(minutes=3))
 
-    response = client.get("/queue")
+    response = client.get("/queue", headers=auth_headers)
 
     ids = [item["id"] for item in response.json()["items"]]
     assert ids == [critical.id, high.id, normal.id]
 
 
-def test_list_queue_fifo_within_same_urgency(db_session):
+def test_list_queue_fifo_within_same_urgency(client, db_session, auth_headers):
     now = datetime.now(UTC)
     older = _make_claim(db_session, urgency="normal", created_at=now - timedelta(minutes=10))
     newer = _make_claim(db_session, urgency="normal", created_at=now - timedelta(minutes=1))
 
-    response = client.get("/queue")
+    response = client.get("/queue", headers=auth_headers)
 
     ids = [item["id"] for item in response.json()["items"]]
     assert ids == [older.id, newer.id]
 
 
+def test_list_queue_without_auth_returns_401(client, db_session):
+    _make_claim(db_session, status="in_human_review")
+
+    response = client.get("/queue")
+
+    assert response.status_code == 401
+
+
 # --- POST /queue/{id}/approve -------------------------------------------------
 
 
-def test_approve_in_human_review_claim_succeeds(db_session):
+def test_approve_in_human_review_claim_succeeds(client, db_session, auth_headers):
     claim = _make_claim(db_session, status="in_human_review")
 
-    response = client.post(f"/queue/{claim.id}/approve")
+    response = client.post(f"/queue/{claim.id}/approve", headers=auth_headers)
 
     assert response.status_code == 200
     assert response.json()["status"] == "approved"
 
 
-def test_approve_writes_audit_row(db_session):
+def test_approve_writes_audit_row(client, db_session, auth_headers):
     claim = _make_claim(db_session, status="in_human_review")
 
-    client.post(f"/queue/{claim.id}/approve")
+    client.post(f"/queue/{claim.id}/approve", headers=auth_headers)
 
     audit = db_session.execute(
         select(AuditTrail).where(AuditTrail.claim_id == claim.id, AuditTrail.step == "approve")
@@ -129,18 +100,39 @@ def test_approve_writes_audit_row(db_session):
     assert audit.detail == {"from": "in_human_review", "to": "approved"}
 
 
-def test_approve_nonexistent_claim_returns_404():
-    response = client.post("/queue/999999/approve")
+def test_approve_nonexistent_claim_returns_404(client, auth_headers):
+    response = client.post("/queue/999999/approve", headers=auth_headers)
     assert response.status_code == 404
 
 
-def test_approve_already_approved_claim_returns_409(db_session):
+def test_approve_already_approved_claim_returns_409(client, db_session, auth_headers):
     claim = _make_claim(db_session, status="approved")
 
-    response = client.post(f"/queue/{claim.id}/approve")
+    response = client.post(f"/queue/{claim.id}/approve", headers=auth_headers)
 
     assert response.status_code == 409
     assert "approved" in response.json()["detail"]
+
+
+def test_approve_without_auth_returns_401(client, db_session):
+    claim = _make_claim(db_session, status="in_human_review")
+
+    response = client.post(f"/queue/{claim.id}/approve")
+
+    assert response.status_code == 401
+
+
+def test_approve_with_non_operator_role_returns_403(client, db_session):
+    claim = _make_claim(db_session, status="in_human_review")
+    viewer = User(email="viewer@test.com", password_hash=hash_password("x"), role="viewer")
+    db_session.add(viewer)
+    db_session.commit()
+    db_session.refresh(viewer)
+    headers = {"Authorization": f"Bearer {create_access_token(viewer)}"}
+
+    response = client.post(f"/queue/{claim.id}/approve", headers=headers)
+
+    assert response.status_code == 403
 
 
 # --- POST /queue/{id}/approve with edits --------------------------------------
@@ -154,10 +146,10 @@ def _make_claim_with_extraction(db_session, extraction: dict, **kwargs):
     return claim
 
 
-def test_approve_without_edits_still_works_backward_compatible(db_session):
+def test_approve_without_edits_still_works_backward_compatible(client, db_session, auth_headers):
     claim = _make_claim_with_extraction(db_session, {"plate": "34 ABC 123"})
 
-    response = client.post(f"/queue/{claim.id}/approve", json={})
+    response = client.post(f"/queue/{claim.id}/approve", json={}, headers=auth_headers)
 
     assert response.status_code == 200
     body = response.json()
@@ -171,7 +163,7 @@ def test_approve_without_edits_still_works_backward_compatible(db_session):
     assert "edits" not in audit.detail
 
 
-def test_approve_with_edits_updates_extraction_and_writes_diff(db_session):
+def test_approve_with_edits_updates_extraction_and_writes_diff(client, db_session, auth_headers):
     claim = _make_claim_with_extraction(
         db_session, {"plate": "34ABC123", "damage_type": "collision"}
     )
@@ -179,6 +171,7 @@ def test_approve_with_edits_updates_extraction_and_writes_diff(db_session):
     response = client.post(
         f"/queue/{claim.id}/approve",
         json={"edits": {"plate": "34 ABC 123"}},
+        headers=auth_headers,
     )
 
     assert response.status_code == 200
@@ -194,7 +187,7 @@ def test_approve_with_edits_updates_extraction_and_writes_diff(db_session):
     ]
 
 
-def test_approve_with_nested_edit_updates_incident_location(db_session):
+def test_approve_with_nested_edit_updates_incident_location(client, db_session, auth_headers):
     claim = _make_claim_with_extraction(
         db_session, {"incident_location": {"city": "Ankara", "district": None}}
     )
@@ -202,6 +195,7 @@ def test_approve_with_nested_edit_updates_incident_location(db_session):
     response = client.post(
         f"/queue/{claim.id}/approve",
         json={"edits": {"incident_location.city": "İstanbul"}},
+        headers=auth_headers,
     )
 
     assert response.status_code == 200
@@ -219,24 +213,26 @@ def test_approve_with_nested_edit_updates_incident_location(db_session):
     ]
 
 
-def test_approve_with_non_editable_field_returns_400(db_session):
+def test_approve_with_non_editable_field_returns_400(client, db_session, auth_headers):
     claim = _make_claim_with_extraction(db_session, {"plate": "34 ABC 123"})
 
     response = client.post(
         f"/queue/{claim.id}/approve",
         json={"edits": {"masked_text": "değiştirilmiş metin"}},
+        headers=auth_headers,
     )
 
     assert response.status_code == 400
     assert "masked_text" in response.json()["detail"]
 
 
-def test_approve_with_same_value_produces_no_diff(db_session):
+def test_approve_with_same_value_produces_no_diff(client, db_session, auth_headers):
     claim = _make_claim_with_extraction(db_session, {"plate": "34 ABC 123"})
 
     response = client.post(
         f"/queue/{claim.id}/approve",
         json={"edits": {"plate": "34 ABC 123"}},
+        headers=auth_headers,
     )
 
     assert response.status_code == 200
@@ -246,24 +242,26 @@ def test_approve_with_same_value_produces_no_diff(db_session):
     assert "edits" not in audit.detail
 
 
-def test_approve_with_edits_and_no_extraction_returns_409(db_session):
+def test_approve_with_edits_and_no_extraction_returns_409(client, db_session, auth_headers):
     claim = _make_claim(db_session, status="in_human_review")  # data={}, no extraction
 
     response = client.post(
         f"/queue/{claim.id}/approve",
         json={"edits": {"plate": "34 ABC 123"}},
+        headers=auth_headers,
     )
 
     assert response.status_code == 409
     assert "extraction" in response.json()["detail"].lower()
 
 
-def test_approve_edit_is_actually_persisted_to_db(db_session):
+def test_approve_edit_is_actually_persisted_to_db(client, db_session, auth_headers):
     claim = _make_claim_with_extraction(db_session, {"plate": "34ABC123"})
 
     client.post(
         f"/queue/{claim.id}/approve",
         json={"edits": {"plate": "34 ABC 123"}},
+        headers=auth_headers,
     )
 
     # db_session is a separate session from the one the request used; without
@@ -277,19 +275,19 @@ def test_approve_edit_is_actually_persisted_to_db(db_session):
 # --- POST /queue/{id}/reject -------------------------------------------------
 
 
-def test_reject_in_human_review_claim_succeeds(db_session):
+def test_reject_in_human_review_claim_succeeds(client, db_session, auth_headers):
     claim = _make_claim(db_session, status="in_human_review")
 
-    response = client.post(f"/queue/{claim.id}/reject")
+    response = client.post(f"/queue/{claim.id}/reject", headers=auth_headers)
 
     assert response.status_code == 200
     assert response.json()["status"] == "archived"
 
 
-def test_reject_writes_audit_row(db_session):
+def test_reject_writes_audit_row(client, db_session, auth_headers):
     claim = _make_claim(db_session, status="in_human_review")
 
-    client.post(f"/queue/{claim.id}/reject")
+    client.post(f"/queue/{claim.id}/reject", headers=auth_headers)
 
     audit = db_session.execute(
         select(AuditTrail).where(AuditTrail.claim_id == claim.id, AuditTrail.step == "reject")
@@ -297,10 +295,18 @@ def test_reject_writes_audit_row(db_session):
     assert audit.detail == {"from": "in_human_review", "to": "archived"}
 
 
-def test_reject_already_archived_claim_returns_409(db_session):
+def test_reject_already_archived_claim_returns_409(client, db_session, auth_headers):
     claim = _make_claim(db_session, status="archived")
 
-    response = client.post(f"/queue/{claim.id}/reject")
+    response = client.post(f"/queue/{claim.id}/reject", headers=auth_headers)
 
     assert response.status_code == 409
     assert "archived" in response.json()["detail"]
+
+
+def test_reject_without_auth_returns_401(client, db_session):
+    claim = _make_claim(db_session, status="in_human_review")
+
+    response = client.post(f"/queue/{claim.id}/reject")
+
+    assert response.status_code == 401

@@ -9,7 +9,8 @@ from sqlalchemy.orm import Session
 
 from api.audit import write_audit
 from api.database import get_db
-from api.models.db import Claim
+from api.dependencies import get_current_user, require_role
+from api.models.db import Claim, User
 from api.models.schemas import ApproveRequest, ClaimListOut, ClaimOut
 
 router = APIRouter(prefix="/queue", tags=["queue"])
@@ -88,6 +89,7 @@ def list_queue(
     db: Session = Depends(get_db),
     limit: int = Query(20, le=100),
     offset: int = Query(0, ge=0),
+    _user: User = Depends(get_current_user),
 ):
     """Claims waiting for human review: most urgent first, FIFO within urgency."""
     base_filter = Claim.status == "in_human_review"
@@ -143,12 +145,21 @@ def _transition(
 
 
 @router.post("/{claim_id}/approve", response_model=ClaimOut)
-def approve_claim(claim_id: int, body: ApproveRequest | None = None, db: Session = Depends(get_db)):
+def approve_claim(
+    claim_id: int,
+    body: ApproveRequest | None = None,
+    db: Session = Depends(get_db),
+    _user: User = Depends(require_role("operator", "admin")),
+):
     edits = body.edits if body else None
     on_claim = (lambda claim: _apply_edits(claim, edits)) if edits else None
     return _transition(db, claim_id, to_status="approved", step="approve", on_claim=on_claim)
 
 
 @router.post("/{claim_id}/reject", response_model=ClaimOut)
-def reject_claim(claim_id: int, db: Session = Depends(get_db)):
+def reject_claim(
+    claim_id: int,
+    db: Session = Depends(get_db),
+    _user: User = Depends(require_role("operator", "admin")),
+):
     return _transition(db, claim_id, to_status="archived", step="reject")

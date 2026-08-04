@@ -9,7 +9,7 @@ from prometheus_fastapi_instrumentator import Instrumentator
 
 from api.database import SessionLocal
 from api.metrics import refresh_queue_metrics
-from api.routers import claims, ingest, queue, stats
+from api.routers import auth, claims, ingest, queue, stats
 
 logger = logging.getLogger("api.main")
 
@@ -60,6 +60,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(auth.router)
 app.include_router(ingest.router)
 app.include_router(claims.router)
 app.include_router(queue.router)
@@ -74,5 +75,7 @@ Instrumentator().instrument(app).expose(app)
 
 @app.get("/health")
 def health():
-    """Liveness check. DB + Redis checks will be added in later sprints."""
+    """Liveness check, deliberately unauthenticated (load balancers, docker
+    healthcheck, etc. cannot carry a user JWT). DB + Redis checks will be
+    added in later sprints."""
     return {"status": "ok", "service": "api"}
