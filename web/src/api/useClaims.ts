@@ -1,4 +1,5 @@
 import {useQuery} from "@tanstack/react-query";
+import { authenticatedFetch } from "./auth";
 
 interface Claim {
     id: number;
@@ -16,7 +17,7 @@ interface ClaimsResponse {
 }
 
 async function fetchClaims(): Promise<ClaimsResponse> {
-    const res = await fetch("/api/claims");
+    const res = await authenticatedFetch("/api/claims");
     if (!res.ok) {
         throw new Error(`Failed to fetch claims: ${res.status}`);
     }
