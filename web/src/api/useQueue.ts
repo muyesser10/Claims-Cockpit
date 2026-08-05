@@ -59,7 +59,7 @@ export interface Claim {
   created_at: string;
 }
 
-interface QueueResponse {
+export interface QueueResponse {
   total: number;
   items: Claim[];
 }
@@ -106,13 +106,15 @@ async function rejectClaim(id: number): Promise<Claim> {
   return res.json();
 }
 
+// Her iki mutation da invalidateQueries'in promise'ini DÖNDÜRÜR (fire-and-forget
+// değil). react-query önce buradaki onSuccess'i await eder, sonra mutate()
+// çağrısına verilen onSuccess'i çalıştırır — böylece Queue.tsx "sıradaki kayıt"ı
+// tazelenmiş liste üzerinden seçebiliyor, bir tur bayat veri görmüyor.
 export function useApproveClaim() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ id, edits }: { id: number; edits?: ClaimEdits }) => approveClaim(id, edits),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["queue"] });
-    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["queue"] }),
   });
 }
 
@@ -120,8 +122,6 @@ export function useRejectClaim() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: number) => rejectClaim(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["queue"] });
-    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["queue"] }),
   });
 }
