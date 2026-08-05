@@ -9,7 +9,9 @@ import pytest
 from eval.loader import (
     BASELINE_CHANNEL_MIX,
     EvalRecord,
+    baseline_fixture,
     baseline_ids,
+    corpus_fingerprint,
     load_records,
     sample,
     select,
@@ -160,3 +162,37 @@ def test_real_corpus_still_carries_every_pinned_record():
     assert len(picked) == 100
     for channel, count in BASELINE_CHANNEL_MIX.items():
         assert sum(1 for record in picked if record.channel == channel) == count
+
+
+def test_corpus_still_matches_the_fingerprint_the_baseline_was_pinned_against():
+    """The direct form of the data-integrity guard.
+
+    The channel-mix check above catches a rebuild only when the mix moves, which
+    is how PR #44 was caught - by luck. A rebuild that preserved the mix and
+    replaced the texts would have passed it, and every number measured afterwards
+    would have been reported as comparable with a baseline describing different
+    records. This check does not depend on that luck.
+
+    When it fails, the corpus changed under the baseline. The fix is to re-pin
+    and re-measure, not to update the digests: the old number stops meaning
+    anything either way, and only one of the two options admits it.
+    """
+    pinned = baseline_fixture()["corpus"]
+    assert corpus_fingerprint() == pinned, (
+        "the corpus no longer matches what the baseline was pinned against - "
+        "every measurement taken against that baseline is now incomparable, and "
+        "the sample has to be re-pinned and re-measured"
+    )
+
+
+def test_every_pinned_record_is_a_claim():
+    """The sample's defining property, asserted rather than assumed.
+
+    Extraction only ever runs on claims: classification exits early for the other
+    two content types (design doc §4). A pinned sample that drifted to include
+    them would raise the accuracy without the model doing anything - their only
+    filled field is policy_no, so a model answering null everywhere scores full
+    marks on them.
+    """
+    picked = select(load_records(), baseline_ids())
+    assert {record.expected.get("content_type") for record in picked} == {"claim"}
