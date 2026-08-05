@@ -4,6 +4,8 @@ import ClaimsTable from "../components/ClaimsTable";
 import StatCards from "../components/StatCards";
 import UrgencyDonut from "../components/UrgencyDonut";
 import CityBar from "../components/CityBar";
+import TrendChart from "../components/TrendChart";
+import Pulse from "../components/Pulse";
 
 export default function Dashboard() {
   const { data, isLoading, isError, error } = useClaims();
@@ -17,10 +19,16 @@ export default function Dashboard() {
       {statsError && <p className="text-red-600">İstatistikler yüklenemedi.</p>}
       {stats && (
         <>
+          <div className="mb-4">
+            <Pulse lastClaimAt={stats.last_claim_at} />
+          </div>
           <StatCards statusCounts={stats.status_counts} />
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
             <UrgencyDonut urgencyCounts={stats.urgency_counts} />
             <CityBar cityCounts={stats.city_counts} />
+          </div>
+          <div className="mb-6">
+            <TrendChart trend={stats.trend} />
           </div>
         </>
       )}
