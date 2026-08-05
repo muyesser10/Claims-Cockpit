@@ -13,6 +13,11 @@ interface QueueDetailProps {
   onApprove: (edits?: ClaimEdits) => void;
   onReject: () => void;
   isSubmitting: boolean;
+  // Reddin iki adımlı onayı Queue.tsx'te tutuluyor (controlled): 'r' kısayolunun
+  // ikinci basışı da aynı durumu okuyup yazdığı için tuş ve buton aynı akışı
+  // paylaşıyor. Bu component adımın sadece görünen tarafını render eder.
+  confirmingReject: boolean;
+  onConfirmingRejectChange: (confirming: boolean) => void;
 }
 
 const damageTypeOptions: { value: DamageType; label: string }[] = [
@@ -144,6 +149,8 @@ export default function QueueDetail({
   onApprove,
   onReject,
   isSubmitting,
+  confirmingReject,
+  onConfirmingRejectChange,
 }: QueueDetailProps) {
   const extraction = claim.data.extraction;
   const flags = claim.data.validation_flags ?? [];
@@ -152,7 +159,6 @@ export default function QueueDetail({
   const [form, setForm] = useState<FormState>(() =>
     extraction ? toFormState(extraction) : EMPTY_FORM,
   );
-  const [confirmingReject, setConfirmingReject] = useState(false);
   const [activeField, setActiveField] = useState<string | null>(null);
 
   function update<K extends keyof FormState>(field: K, value: FormState[K]) {
@@ -333,17 +339,14 @@ export default function QueueDetail({
             <button
               type="button"
               disabled={isSubmitting}
-              onClick={() => {
-                setConfirmingReject(false);
-                onReject();
-              }}
+              onClick={onReject}
               className="px-4 py-2 rounded bg-red-600 text-white text-sm font-medium disabled:opacity-50"
             >
               Reddi Onayla
             </button>
             <button
               type="button"
-              onClick={() => setConfirmingReject(false)}
+              onClick={() => onConfirmingRejectChange(false)}
               className="px-4 py-2 rounded border border-slate-300 text-sm text-slate-600"
             >
               Vazgeç
@@ -353,7 +356,7 @@ export default function QueueDetail({
           <button
             type="button"
             disabled={isSubmitting}
-            onClick={() => setConfirmingReject(true)}
+            onClick={() => onConfirmingRejectChange(true)}
             className="px-4 py-2 rounded border border-red-300 text-red-700 text-sm font-medium disabled:opacity-50"
           >
             Reddet
