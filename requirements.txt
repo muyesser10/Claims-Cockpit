@@ -34,3 +34,6 @@ prometheus-client>=0.20
 prometheus-fastapi-instrumentator>=7.0
 # LLM Engineer — local embeddings (ADR-002). Pulls torch; grows the worker image.
 sentence-transformers>=5.0
+
+# LLM Engineer — Text-to-SQL guard (design doc §7.1). Pure Python, no binaries.
+sqlglot>=25.0
