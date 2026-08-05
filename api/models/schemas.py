@@ -45,10 +45,17 @@ class ApproveRequest(BaseModel):
     edits: dict[str, Any] | None = None
 
 
+class TrendPoint(BaseModel):
+    date: str
+    count: int
+
+
 class StatsOut(BaseModel):
     urgency_counts: dict[str, int]
     status_counts: dict[str, int]
     city_counts: dict[str, int]
+    trend: list[TrendPoint]
+    last_claim_at: datetime | None
 
 
 class LoginRequest(BaseModel):

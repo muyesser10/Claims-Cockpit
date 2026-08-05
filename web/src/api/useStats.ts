@@ -1,10 +1,17 @@
 import { useQuery } from "@tanstack/react-query";
 import { authenticatedFetch } from "./auth";
 
+interface TrendPoint {
+  date: string;
+  count: number;
+}
+
 interface StatsResponse {
   urgency_counts: Record<string, number>;
   status_counts: Record<string, number>;
   city_counts: Record<string, number>;
+  trend: TrendPoint[];
+  last_claim_at: string | null;
 }
 
 async function fetchStats(): Promise<StatsResponse> {
