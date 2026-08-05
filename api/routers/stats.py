@@ -1,7 +1,7 @@
 # api/routers/stats.py
 """Aggregate statistics for the Pano dashboard (S2-8, S3-5)."""
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 
 from fastapi import APIRouter, Depends
 from sqlalchemy import func, select
@@ -13,6 +13,13 @@ from api.models.db import Claim, User
 from api.models.schemas import StatsOut, TrendPoint
 
 router = APIRouter(prefix="/istatistik", tags=["istatistik"])
+
+
+def _format_trend_date(value: date | str) -> str:
+    """Postgres returns a date object, SQLite (tests) returns a string — normalize both."""
+    if isinstance(value, str):
+        return value
+    return value.strftime("%Y-%m-%d")
 
 
 @router.get("/ozet", response_model=StatsOut)
@@ -28,7 +35,7 @@ def get_ozet(db: Session = Depends(get_db), _user: User = Depends(get_current_us
 
     # Trend: last 7 days, daily claim counts
     week_ago = datetime.now(UTC) - timedelta(days=7)
-    day_expr = func.date_trunc("day", Claim.created_at)
+    day_expr = func.date(Claim.created_at)
     trend_rows = db.execute(
         select(day_expr, func.count())
         .where(Claim.created_at >= week_ago)
@@ -43,6 +50,6 @@ def get_ozet(db: Session = Depends(get_db), _user: User = Depends(get_current_us
         urgency_counts={(row[0] or "unknown"): row[1] for row in urgency_rows},
         status_counts={(row[0] or "unknown"): row[1] for row in status_rows},
         city_counts={row[0]: row[1] for row in city_rows},
-        trend=[TrendPoint(date=row[0].strftime("%Y-%m-%d"), count=row[1]) for row in trend_rows],
+        trend=[TrendPoint(date=_format_trend_date(row[0]), count=row[1]) for row in trend_rows],
         last_claim_at=last_claim_at,
     )
