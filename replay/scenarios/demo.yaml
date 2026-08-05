@@ -1,0 +1,18 @@
+name: "Ege Dolu Senaryosu"
+description: "Demo: normal akış, sonra İzmir'den dolu ihbar dalgası"
+
+phases:
+  - name: "normal_flow"
+    description: "Karışık kanal, karışık il normal ihbarlar"
+    filter:
+      exclude_damage_type: "hail"
+    count: 6
+    interval_seconds: 3
+
+  - name: "hail_surge"
+    description: "İzmir'den ard arda dolu ihbarları (dolu fırtınası dalgası)"
+    filter:
+      damage_type: "hail"
+      city: "İzmir"
+    count: 8
+    interval_seconds: 1
