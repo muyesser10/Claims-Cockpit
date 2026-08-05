@@ -32,8 +32,13 @@ structlog>=24.1
 # Backend duo — Prometheus + Grafana observability (S3-9)
 prometheus-client>=0.20
 prometheus-fastapi-instrumentator>=7.0
-# LLM Engineer — local embeddings (ADR-002). Pulls torch; grows the worker image.
-sentence-transformers>=5.0
 
 # LLM Engineer — Text-to-SQL guard (design doc §7.1). Pure Python, no binaries.
 sqlglot>=25.0
+
+# Embeddings (sentence-transformers, torch) live in requirements-worker.txt.
+# Only the worker image installs that file: api/ embeds nothing, and torch took
+# that image's downloads from 34 MB to 625 MB for code it never imported
+# (measured 2026-08-05, Linux/cp311 wheels). CI does not install it either -
+# worker/embedding/encoder.py imports sentence_transformers inside load_model(),
+# so the tests run against a stub without it.

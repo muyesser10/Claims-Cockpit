@@ -1,0 +1,39 @@
+# Build context filter for the api and worker images (both build from the repo
+# root). Without this file `COPY . .` in worker/Dockerfile ships the whole
+# repo - .git, web/node_modules, the measurement archive - and any change to
+# any of it invalidates the layer and rebuilds from there.
+
+# .env holds the OpenAI key. It is gitignored, but gitignore does not apply to
+# a build context: before this file existed, `COPY . .` baked it into the
+# worker image. Compose passes it in via env_file at runtime; it must never be
+# a layer.
+.env
+.env.*
+!.env.example
+
+.git
+.gitignore
+.github
+
+# The web image builds from ./web with its own context, so nothing here needs
+# the frontend - least of all node_modules.
+web/
+
+# Python build noise
+**/__pycache__/
+**/*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.venv/
+venv/
+env/
+
+# Corpora: read by eval and replay on the host, never inside a container.
+# data/dictionaries/ is NOT excluded - masking loads the name list at runtime.
+data/*.jsonl
+
+# Measurement archive (gitignored, but the build context does not know that)
+olcum-arsivi/
+
+docs/
+*.md
