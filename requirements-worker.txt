@@ -1,0 +1,19 @@
+# Worker-only dependencies, on top of requirements.txt.
+#
+# Split out because torch is huge and only the worker needs it. The api image
+# installs requirements.txt alone; nothing under api/ imports sentence
+# transformers, and pulling torch in there cost ~2.5 GB and several minutes of
+# build time for code that never ran.
+#
+# NOTE for local installs on Linux: install torch from PyTorch's CPU index
+# first, otherwise pip resolves it from PyPI and downloads the CUDA wheel -
+# 502 MB against 183 MB for +cpu, measured 2026-08-05 on torch 2.13.0:
+#
+#   pip install --index-url https://download.pytorch.org/whl/cpu torch
+#   pip install -r requirements.txt -r requirements-worker.txt
+#
+# On Windows and macOS the PyPI wheel is already CPU-only; the first line is a
+# no-op there. worker/Dockerfile does this in two steps for the same reason.
+
+# LLM Engineer — local embeddings (ADR-002, intfloat/multilingual-e5-small)
+sentence-transformers>=5.0
