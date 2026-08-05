@@ -35,7 +35,9 @@
 - [x] **Pano tam görünüm (S3-5)** — @nursenakyga. StatCards/UrgencyDonut/CityBar + yeni TrendChart/Pulse bileşenleri, `/istatistik/ozet` trend sorgusu eklendi.
 - [x] **Kaynak cümle vurgulama (S2-12)** — @nursenakyga. `SourceHighlight.tsx`, offset tabanlı, kanıtsız alanlarda savunmacı (çökmüyor).
 - [x] worker gerçek Redis tüketicisi + pipeline (S1-5), extraction+validation pipeline entegrasyonu — @nursenakyga
-
+- [x] **S3-6 — Soru-cevap arayüzü + kaynak çipleri (mock)** — @nursenakyga.Çağrı'nın dondurduğu sözleşmeye (question/answer/mode/answerable/
+  refusal_reason/sources/sql/row_count/duration_ms) birebir uyumlu mock var,gerçek endpoint gelince tek fonksiyon değişecek. Üç senaryo da (retrieval,sql, answerable=false) test edildi.
+  
 ### LLM / Extraction / RAG (Cagri12345)
 - [x] `worker/llm/client.py` — OpenAI istemcisi (instructor+Pydantic), iki kademe, seed, retry, audit log
 - [x] `prompts/extraction_v1.txt` + `worker/extraction/extractor.py` (S1-15) — halüsinasyon savunması, offset çözümleme
@@ -80,7 +82,8 @@ Tüm maddeler tamamlandı (masking v1, GT üreteci, worker pipeline, LLM client+
 - [x] S3-1/S3-7 (kısmen) — embedding modeli seçimi (ADR-002), RAG Phase 1 (Text-to-SQL) — @Cagri12345
 - [x] **S3-4 — Kuyruk klavye UX (a/r kısayolları + otomatik-sonraki + yardım overlay)** — @bariss9 (bu PR)
 - [ ] S3-2 — RAG Phase 2 (/soru endpoint, hibrit retrieval) — @Cagri12345
-- [ ] S3-3/S3-6 — RAG puanlama + soru-cevap arayüzü — @MehmetTayyip / (FE sahibi netleşecek)
+- [ ] S3-3 — RAG puanlama— @MehmetTayyip 
+- [x] S3-6 — soru-cevap arayüzü — @nursenakyga
 - [ ] S3-11 — Metrikler ekranı (Mehmet'in RAG koşu verisine bağımlı, sona bırakılabilir)
 
 ### Sprint 4 — Cila + Hata Merkezi + Demo — DURUM: başlamadı
@@ -93,7 +96,6 @@ Tüm maddeler tamamlandı (masking v1, GT üreteci, worker pipeline, LLM client+
 |----------|--------------|--------|-------|
 | Soyisim sözlüğü kaynağı | TÜİK/temiz liste | @muyesser10 | Stub, araştırma sürüyor |
 | Torch CPU-only pin | `requirements.txt`'e `--extra-index-url .../whl/cpu` | @Cagri12345 | İletildi, cevap bekleniyor. Şu an worker image'ı CUDA'lı torch çekiyor (~2-2.5GB gereksiz, build ~9dk) |
-| `test_stats.py` SQLite regresyonu | `date_trunc` Postgres'e özgü, SQLite test DB'sinde patlıyor | @nursenakyga | S3-5 ile main'e girdi (692ea1c), bildirilecek |
 | DS branch (feature/ds-analiz-kurulum) | Branch'in akıbeti | @MehmetTayyip | Hâlâ çözülmedi, standup'ta bakılacak |
 | RAG eval seti tasarımı | 61 benzersiz açıklama kısıtına göre tasarlanmalı | @muyesser10 | İletildi |
 
