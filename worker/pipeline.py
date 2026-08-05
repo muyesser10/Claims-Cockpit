@@ -5,6 +5,7 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from api.models.db import AuditTrail, Claim, MaskMapping, RawMessage
+from worker.embedding.store import store_embedding
 from worker.extraction.extractor import extract
 from worker.masking.pipeline import mask_all
 from worker.masking.sanity import SanityCheckResult, check_sanity, is_sanity_enabled
@@ -240,6 +241,47 @@ def step_validate(
     )
 
 
+def step_embed(db: Session, msg: RawMessage, claim: Claim, masked_text: str) -> None:
+    """Embed the claim text so RAG retrieval can reach it (ADR-003).
+
+    Runs off masked_text rather than the extraction output. A claim whose
+    extraction failed is still a claim an operator may ask about, and tying the
+    two together would make every extraction failure a silent hole in search.
+
+    Skipped when masking sanity flagged leaked PII, matching step_extract's rule
+    above: one decision, applied the same way in both places.
+    """
+    if claim.data.get("masking_sanity_flags"):
+        log_audit(
+            db, "embedding_skipped", claim_id=claim.id, detail={"reason": "masking_sanity_flag"}
+        )
+        return
+
+    try:
+        result = store_embedding(db, claim.id, masked_text)
+        log_audit(
+            db,
+            "embedding",
+            raw_message_id=msg.id,
+            claim_id=claim.id,
+            detail={"dimensions": result.dimensions, "text_length": result.text_length},
+            provider=result.model,
+            duration_ms=result.duration_ms,
+        )
+    except Exception as e:
+        logger.error(f"raw_message_id={msg.id} embedding failed: {e}", exc_info=True)
+        log_audit(
+            db,
+            "embedding_error",
+            raw_message_id=msg.id,
+            claim_id=claim.id,
+            detail={"error": str(e)},
+        )
+        # Same rule as extraction (see step_extract): claim.status is left alone.
+        # A claim that cannot be embedded is still triaged and still queued - it
+        # is only invisible to RAG until a backfill picks it up.
+
+
 def process_message(db: Session, raw_message_id: int) -> None:
     msg = db.get(RawMessage, raw_message_id)
     if msg is None:
@@ -252,6 +294,7 @@ def process_message(db: Session, raw_message_id: int) -> None:
         urgency = step_classify(db, msg, masked_text)
         claim = step_route(db, msg, masked_text, urgency, sanity_result)
         step_extract(db, msg, claim, masked_text)
+        step_embed(db, msg, claim, masked_text)
         db.commit()
         logger.info(f"raw_message_id={raw_message_id} | pipeline completed | status={msg.status}")
     except Exception as e:
