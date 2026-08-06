@@ -79,7 +79,29 @@ services:
     depends_on:
       - api
 
-  # 7. PROMETHEUS + GRAFANA  (S3-9 observability)
+  # 7. RAG  (/soru — ADR-003)
+  # Built from the worker image with a different command: it needs the same
+  # sentence-transformers model, and torch in the api image would undo PR #52.
+  # A separate container from `worker` on purpose — a question must not wait
+  # behind a claim being extracted, and a crash in one must not take the other
+  # down.
+  rag:
+    build:
+      context: .
+      dockerfile: worker/Dockerfile
+    container_name: claims_rag
+    command: ["uvicorn", "rag.main:app", "--host", "0.0.0.0", "--port", "8100"]
+    env_file:
+      - .env
+    # expose, not ports: the api reaches this over the compose network. Publishing
+    # it would put a read path into claim data on the host, and /ingest's
+    # deliberate auth exemption is the one precedent nobody wants repeated.
+    expose: ["8100"]
+    depends_on:
+      db: { condition: service_healthy }
+    restart: always
+
+  # 8. PROMETHEUS + GRAFANA  (S3-9 observability)
   prometheus:
     image: prom/prometheus:latest
     container_name: claims_prometheus
