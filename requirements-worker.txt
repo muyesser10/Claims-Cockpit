@@ -5,15 +5,25 @@
 # transformers, and pulling torch in there cost ~2.5 GB and several minutes of
 # build time for code that never ran.
 #
-# NOTE for local installs on Linux: install torch from PyTorch's CPU index
-# first, otherwise pip resolves it from PyPI and downloads the CUDA wheel -
-# 502 MB against 183 MB for +cpu, measured 2026-08-05 on torch 2.13.0:
+# The CPU index below is what keeps a local install off the CUDA wheel. On Linux
+# PyPI's torch ships the CUDA kernels inside the wheel - 502 MB against 183 MB
+# for +cpu, measured 2026-08-05 on torch 2.13.0 - on a service with no GPU.
 #
-#   pip install --index-url https://download.pytorch.org/whl/cpu torch
-#   pip install -r requirements.txt -r requirements-worker.txt
+# It works because of how the two indexes compare, not because pip prefers this
+# one: PEP 440 ranks a local version above the same public version, so 2.13.0+cpu
+# beats PyPI's 2.13.0 and pip picks it. Reported by @bariss9 on 2026-08-06 after
+# a one-shot install pulled several GB; the instruction used to be a comment here
+# telling you to install torch separately first, which is a step nobody reads.
 #
-# On Windows and macOS the PyPI wheel is already CPU-only; the first line is a
-# no-op there. worker/Dockerfile does this in two steps for the same reason.
+# --extra-index-url rather than --index-url on purpose: this file is read
+# alongside requirements.txt, and pointing pip at the PyTorch index *only* would
+# leave it unable to find fastapi. worker/Dockerfile still installs torch in a
+# separate --index-url step, which is stronger - there PyPI is not an option at
+# all, so the CUDA wheel cannot be chosen even if the ranking ever changes.
+#
+# On Windows and macOS the PyPI wheel is already CPU-only and this line is a
+# no-op.
+--extra-index-url https://download.pytorch.org/whl/cpu
 
 # LLM Engineer — local embeddings (ADR-002, intfloat/multilingual-e5-small)
 sentence-transformers>=5.0
