@@ -1,7 +1,8 @@
 # ADR-003: `/soru` runs in its own `rag` service
 
 **Date:** 2026-08-05
-**Status:** Proposed
+**Status:** Accepted (2026-08-06, @bariss9 — the owner of `docker-compose.yml`
+and the api service this splits work away from)
 
 ## Context
 
@@ -65,7 +66,13 @@ a claim being extracted, and a crash in one must not take the other down.
   the model. The audit trail entry has to name which.
 - The proxy has to pass the caller's JWT through, or `/soru` ends up as the one
   unauthenticated read path into claim data. It must not repeat `/ingest`'s
-  deliberate exemption by accident.
+  deliberate exemption by accident. Raised again by @bariss9 as the condition of
+  accepting this ADR, and now held by tests rather than by intent: the proxy
+  forwards the caller's header (`test_the_callers_token_is_forwarded`), a request
+  without one is refused before it reaches the network
+  (`test_a_question_without_a_token_never_reaches_the_service`), and the rag
+  service verifies for itself so neither hop is the only door
+  (`rag/test_main.py::test_a_question_without_a_token_is_refused`).
 - Two containers now load code from `worker/`, so a change there redeploys both.
 
 **Open**
