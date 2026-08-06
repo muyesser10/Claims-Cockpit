@@ -67,6 +67,7 @@ Tablo: audit_trail  (pipeline denetim izi — adım süreleri, hatalar)
                             | 'extraction' | 'extraction_error' | 'extraction_skipped'
                             | 'validation' | 'embedding' | 'embedding_error'
                             | 'embedding_skipped' | 'queue_approve' | 'queue_reject'
+                            | 'rag_question'
   provider        text      LLM sağlayıcı, örn. 'openai'
   duration_ms     integer   adımın süresi
   created_at      timestamptz
