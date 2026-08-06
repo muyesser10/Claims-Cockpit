@@ -13,8 +13,8 @@
 - **Aktif sprint:** Sprint 3.
 - **Repo durumu:** 7 servis ayakta (db, redis, api, worker, web, prometheus, grafana — ollama artık fiilen ölü). Uçtan uca akış: /ingest → Redis → worker (mask → sanity → classify → route → extract → validate) → /claims + /queue (auth korumalı) → Pano (tam, S3-5) + Kuyruk (klavye UX ile, S3-4).
 - **Son büyük olaylar:** JWT auth (S3-8), Prometheus+Grafana (S3-9), masking v2 tamamlandı (isim sözlüğü ~1550 + ambiguous kural + LLM sanity + PII-sızıntı hotfix), Pano tam görünüm (S3-5, nursena), classification veri blokeri çözüldü (Müyesser), embedding modeli seçildi (ADR-002, e5-small), RAG phase 1 başladı (Text-to-SQL, Cagri).
-- **Sıradaki iş (BE):** S3-4 (bu PR) sonrası — CLAUDE.md §2/§4 güncellemesi (borç), soyisim sözlüğü resmi kaynağı (Müyesser'den bekleniyor), torch CPU-only pin önerisi (Cagri'ye iletildi, cevap bekleniyor), `test_stats.py` SQLite/date_trunc regresyonu (nursena'ya bildirilecek).
-- **Sıradaki iş (LLM/DS):** RAG phase 2 (retrieval + kaynaklı cevap), eval-quality Grafana paneli (Mehmet), extraction baseline'ının yeniden ölçülmesi (korpus yeniden üretildi, Cagri'nin işi).
+- **Sıradaki iş (BE):** CLAUDE.md §2/§4 güncellemesi (borç), soyisim sözlüğü resmi kaynağı (Müyesser'den bekleniyor), **`claims_flat` view migration'ı** (Cagri'nin `/soru` endpoint'i bunu bekliyor).
+- **Sıradaki iş (LLM/DS):** `/soru` endpoint'i + `rag` servisi (ADR-003, `claims_flat` bekliyor), eval-quality Grafana paneli (Mehmet), extraction baseline'ının yeniden ölçülmesi (korpus yeniden üretildi), classification'ın pipeline'a bağlanması (`worker/classification/` hazır ama `pipeline.py` hâlâ keyword kuralı çalıştırıyor).
 
 ---
 
@@ -46,6 +46,10 @@
 - [x] **RAG Phase 1 — Text-to-SQL** — prompt + SQL guard + generator. `sqlglot` bağımlılığı eklendi.
 - [x] Injury matching düzeltmesi — precision %18,5 → %98,8
 - [x] Eval baseline yeniden pinlendi + korpus fingerprint'i eklendi
+- [x] **step_embed + backfill (S3-2)** — claim metni `claim_embeddings`'e yazılıyor (`masked_text`; `damage_description` korpusta 61 benzersiz değere çöktüğü için seçilmedi, ADR-002). Sanity flag'li kayıtlarda atlanıyor, embed hatası dead_letter'a düşürmüyor. Gerçek modelle uçtan uca doğrulandı: 384 boyut, L2 normu 1.0000, adım 291 ms. `scripts/backfill_embeddings.py` mevcut kayıtlar için (`--dry-run` / `--force`).
+- [x] **RAG Phase 2 — retrieval + kaynaklı cevap + yönlendirme (S3-2)** — `worker/rag/retrieval.py` (pgvector, **eşiksiz sıralama** — ADR-002 "rank, not threshold"; snippet = soruya en yakın cümle, tek batch'te embed), `answer.py` + `prompts/rag_answer_v1.txt` (**atıf doğrulaması**: hiçbir kaynağa dayanmayan cevap gösterilmiyor, `invalid_citations` Hata Merkezi'ne sinyal), `router.py` + `prompts/rag_router_v1.txt` (SQL/retrieval seçimi + filtre çıkarımı, `mode` burada hesaplanıyor). **Endpoint yok** — `claims_flat` bekliyor.
+- [x] **ADR-003** — `/soru` ayrı `rag` compose servisinde (worker image'ından, api torch'suz kalsın diye). Durum: **Proposed**, ekip onayı bekliyor. İki sonucu var: `docker-compose.yml`'ye servis eklenecek ve proxy çağıranın JWT'sini geçirmek zorunda.
+- [x] **Docker build düzeltmesi (PR #52)** — torch CPU indeksinden (502→183 MB), `sentence-transformers` `requirements-worker.txt`'e taşındı (api image'ı artık torch indirmiyor: 625→34 MB), pip cache mount, `.dockerignore` (yoktu — `.env` worker image'ına gömülüyordu).
 
 ### Data / Eval (muyesser10, MehmetTayyip)
 - [x] `worker/parser/sentence_splitter`, `gt_generator.py`, `text_generator.py`, `replay/replay.py` (+ senaryo modu, S3-10)
@@ -81,7 +85,7 @@ Tüm maddeler tamamlandı (masking v1, GT üreteci, worker pipeline, LLM client+
 - [x] S3-10 — Replay v2 senaryo modu — @muyesser10
 - [x] S3-1/S3-7 (kısmen) — embedding modeli seçimi (ADR-002), RAG Phase 1 (Text-to-SQL) — @Cagri12345
 - [x] **S3-4 — Kuyruk klavye UX (a/r kısayolları + otomatik-sonraki + yardım overlay)** — @bariss9 (bu PR)
-- [ ] S3-2 — RAG Phase 2 (/soru endpoint, hibrit retrieval) — @Cagri12345
+- [~] S3-2 — RAG Phase 2 — @Cagri12345. Embedding, retrieval, kaynaklı cevap ve soru yönlendirme bitti; `/soru` endpoint'i + `rag` servisi `claims_flat` view'ini bekliyor.
 - [ ] S3-3 — RAG puanlama— @MehmetTayyip 
 - [x] S3-6 — soru-cevap arayüzü — @nursenakyga
 - [ ] S3-11 — Metrikler ekranı (Mehmet'in RAG koşu verisine bağımlı, sona bırakılabilir)
@@ -95,7 +99,7 @@ Tüm maddeler tamamlandı (masking v1, GT üreteci, worker pipeline, LLM client+
 | Bekleyen | Beklenen şey | Kimden | Durum |
 |----------|--------------|--------|-------|
 | Soyisim sözlüğü kaynağı | TÜİK/temiz liste | @muyesser10 | Stub, araştırma sürüyor |
-| Torch CPU-only pin | `requirements.txt`'e `--extra-index-url .../whl/cpu` | @Cagri12345 | İletildi, cevap bekleniyor. Şu an worker image'ı CUDA'lı torch çekiyor (~2-2.5GB gereksiz, build ~9dk) |
+| **`claims_flat` view migration'ı** | `/soru`'nun SQL yolu onsuz hiç çalışmıyor: prompt ve guard bu view'i tanımlıyor, migration yok | @bariss9 / @nursenakyga | RAG PR'ında iletildi |
 | DS branch (feature/ds-analiz-kurulum) | Branch'in akıbeti | @MehmetTayyip | Hâlâ çözülmedi, standup'ta bakılacak |
 | RAG eval seti tasarımı | 61 benzersiz açıklama kısıtına göre tasarlanmalı | @muyesser10 | İletildi |
 
@@ -105,8 +109,10 @@ Tüm maddeler tamamlandı (masking v1, GT üreteci, worker pipeline, LLM client+
 
 - **Worker/api image bayatlaması** — kod değişince `docker compose up -d --build worker` (veya api) şart, aksi halde eski kod çalışır.
 - **`sqlglot` yerel kurulum eksikliği** — `requirements.txt`'te var ama bazı yerel venv'lerde kurulu değil, `worker/rag/test_*.py` collection hatası verir. Kod sorunu değil, `pip install -r requirements.txt` çözer.
-- **`test_stats.py::test_get_ozet_with_auth_succeeds` main'de kırık** — yukarıdaki bekleyenler tablosuna bak.
-- **Worker image boyutu** — `sentence-transformers`/`torch` CUDA'lı geliyor, gereksiz büyük. Yukarıdaki bekleyenler tablosuna bak.
+- **CI test hatalarını yutuyor** — `.github/workflows/ci.yml:31` satırı `pytest -q || echo "No tests yet..."`. `|| echo` yüzünden testler patlasa da adım yeşil geçiyor; **yeşil CI "testler geçti" anlamına gelmiyor**. Sprint 1 bitti, 400+ test var — bu güvenlik ağı artık amacını aştı.
+- **Maskeleme yanlış pozitif: akrabalık terimleri** — "Eşim yaralandı" → `[NAME_1] yaralandı`. LLM'e giden metinde kimin yaralandığı kayboluyor. Uçtan uca testte görüldü — @bariss9
+- **Maskeleme yanlış negatif: Türkçe karaktersiz isimler** — "Mehmet Yilmaz" (ı yerine i) sözlükte yok, maskelenmiyor; LLM sanity katmanı yakaladı ama o mesaj başına ekstra OpenAI çağrısı. Gerçek dünyada klavye/SMS yüzünden sık — @bariss9
+- **`useQuestion.ts` `urgency`'yi zorunlu tipliyor** (`"critical" | "high" | "normal"`), ama `Claim.urgency` DB'de nullable ve `RetrievedClaim.urgency` `str | None`. Null gelirse `SourceChip`'teki `urgencyDot[source.urgency]` `undefined` döner ve renk noktası sessizce kaybolur (çökmez). Gerçek endpoint bağlanmadan düzeltilmeli; `score` için zaten var olan null kontrolünün aynısı — @nursenakyga
 - Extraction OpenAI anahtarına bağlı — `.env`'de yoksa `extraction_error` audit'i düşer, claim `in_human_review`'da kalır (doğru davranış, aciliyet kaybolmuyor).
 - Veri kontratı ile gerçek dosyalar arasında hâlâ küçük ayrışmalar var (`meta`/`labels` blokları claim.json'da yok) — düşük öncelik.
 - Prompt yer tutucuları (`[PLAKA_1]` vb.) ile masking'in ürettiği (`[PLATE_1]`) farklıydı — Cagri'nin ayrı bir düzeltme PR'ında ele alındı (placeholder + adres-kuralı daraltma).
