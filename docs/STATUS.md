@@ -99,7 +99,7 @@ Tüm maddeler tamamlandı (masking v1, GT üreteci, worker pipeline, LLM client+
 | Bekleyen | Beklenen şey | Kimden | Durum |
 |----------|--------------|--------|-------|
 | Soyisim sözlüğü kaynağı | TÜİK/temiz liste | @muyesser10 | Stub, araştırma sürüyor |
-| **`claims_flat` view migration'ı** | `/soru`'nun SQL yolu onsuz hiç çalışmıyor: prompt ve guard bu view'i tanımlıyor, migration yok | @bariss9 / @nursenakyga | RAG PR'ında iletildi |
+| ~~`claims_flat` view migration'ı~~ | `/soru`'nun SQL yolu onsuz hiç çalışmıyor: prompt ve guard bu view'i tanımlıyor | @bariss9 / @nursenakyga | **Yapıldı** — `298f7de96ab6` (19 kolon + `safe_cast_date`/`safe_cast_numeric`). PR bekliyor, merge olunca bu satır tablodan çıkarılabilir |
 | DS branch (feature/ds-analiz-kurulum) | Branch'in akıbeti | @MehmetTayyip | Hâlâ çözülmedi, standup'ta bakılacak |
 | RAG eval seti tasarımı | 61 benzersiz açıklama kısıtına göre tasarlanmalı | @muyesser10 | İletildi |
 
@@ -113,6 +113,7 @@ Tüm maddeler tamamlandı (masking v1, GT üreteci, worker pipeline, LLM client+
 - **Maskeleme yanlış pozitif: akrabalık terimleri** — "Eşim yaralandı" → `[NAME_1] yaralandı`. LLM'e giden metinde kimin yaralandığı kayboluyor. Uçtan uca testte görüldü — @bariss9
 - **Maskeleme yanlış negatif: Türkçe karaktersiz isimler** — "Mehmet Yilmaz" (ı yerine i) sözlükte yok, maskelenmiyor; LLM sanity katmanı yakaladı ama o mesaj başına ekstra OpenAI çağrısı. Gerçek dünyada klavye/SMS yüzünden sık — @bariss9
 - **`useQuestion.ts` `urgency`'yi zorunlu tipliyor** (`"critical" | "high" | "normal"`), ama `Claim.urgency` DB'de nullable ve `RetrievedClaim.urgency` `str | None`. Null gelirse `SourceChip`'teki `urgencyDot[source.urgency]` `undefined` döner ve renk noktası sessizce kaybolur (çökmez). Gerçek endpoint bağlanmadan düzeltilmeli; `score` için zaten var olan null kontrolünün aynısı — @nursenakyga
+- **`_apply_edits` düzenleme değerlerinin tipini doğrulamıyor** — `ApproveRequest.edits` `dict[str, Any]` (`api/models/schemas.py:45`) ve `api/routers/queue.py:54-79` yalnızca alan **adını** `EDITABLE_FIELDS`'a karşı kontrol ediyor; değeri olduğu gibi `claim.data["extraction"]`'a yazıyor. Yani `{"estimated_amount": "1.250,50 TL"}` veya `{"incident_date": "yarın"}` onay isteğiyle JSON'a girebiliyor. `claims_flat` view'i bunu `safe_cast_*` ile NULL'a çevirdiği için sorgular patlamıyor, ama **operatörün düzeltmesi analitikten sessizce kayboluyor** — asıl düzeltme endpoint'te tip doğrulaması (alan başına Pydantic tipi). View migration'ından ayrı bir iş — @bariss9 / @nursenakyga
 - Extraction OpenAI anahtarına bağlı — `.env`'de yoksa `extraction_error` audit'i düşer, claim `in_human_review`'da kalır (doğru davranış, aciliyet kaybolmuyor).
 - Veri kontratı ile gerçek dosyalar arasında hâlâ küçük ayrışmalar var (`meta`/`labels` blokları claim.json'da yok) — düşük öncelik.
 - Prompt yer tutucuları (`[PLAKA_1]` vb.) ile masking'in ürettiği (`[PLATE_1]`) farklıydı — Cagri'nin ayrı bir düzeltme PR'ında ele alındı (placeholder + adres-kuralı daraltma).
