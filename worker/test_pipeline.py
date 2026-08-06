@@ -13,9 +13,12 @@ import pytest
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
 
+import worker.embedding.store as store_module
 import worker.masking.sanity as sanity_module
 import worker.pipeline as pipeline_module
-from api.models.db import AuditTrail, Base, Claim, RawMessage
+from api.models.db import AuditTrail, Base, Claim, ClaimEmbedding, RawMessage
+from worker.embedding.encoder import EMBEDDING_DIMENSIONS
+from worker.embedding.store import store_embedding as real_store_embedding
 from worker.extraction.extractor import ExtractionResult
 from worker.masking.sanity import SanityCheckResult, SanityFlag
 
@@ -211,3 +214,122 @@ def test_sanity_clean_result_extraction_runs_normally(db, monkeypatch):
     claim = db.execute(select(Claim).where(Claim.raw_message_id == msg.id)).scalar_one()
     assert claim.data["masking_sanity_flags"] == []
     assert "extraction" in claim.data
+
+
+# --- step_embed (S3-2, ADR-003) ---------------------------------------------
+#
+# conftest.py stubs store_embedding for every worker test so the pipeline never
+# loads the real model. The tests below that assert on a stored vector put the
+# real function back and stub the encoder underneath it instead.
+
+
+class _StubEncoder:
+    """Fixed-width vectors, no model. Mirrors worker/embedding/test_store.py."""
+
+    def embed_passages(self, texts: list[str]) -> list[list[float]]:
+        return [[0.1] * EMBEDDING_DIMENSIONS for _ in texts]
+
+
+def _use_real_store_with_stub_encoder(monkeypatch):
+    monkeypatch.setattr(pipeline_module, "store_embedding", real_store_embedding)
+    monkeypatch.setattr(store_module, "get_encoder", lambda: _StubEncoder())
+
+
+def test_embedding_writes_vector_and_audit(db, monkeypatch):
+    """The happy path: a vector lands in claim_embeddings and the step is audited."""
+    monkeypatch.setenv("MASKING_SANITY_ENABLED", "false")
+    monkeypatch.setattr(pipeline_module, "extract", lambda *a, **k: FAKE_EXTRACTION)
+    _use_real_store_with_stub_encoder(monkeypatch)
+
+    msg = _make_raw_message(db)
+    pipeline_module.process_message(db, msg.id)
+
+    claim = db.execute(select(Claim).where(Claim.raw_message_id == msg.id)).scalar_one()
+    row = db.execute(select(ClaimEmbedding).where(ClaimEmbedding.claim_id == claim.id)).scalar_one()
+    assert len(row.embedding) == EMBEDDING_DIMENSIONS
+
+    audit = db.execute(
+        select(AuditTrail).where(AuditTrail.claim_id == claim.id, AuditTrail.step == "embedding")
+    ).scalar_one()
+    assert audit.detail["dimensions"] == EMBEDDING_DIMENSIONS
+    assert audit.duration_ms is not None
+
+
+def test_sanity_leak_skips_embedding(db, monkeypatch):
+    """Same rule as extraction: flagged PII must not reach the encoder either."""
+    monkeypatch.setenv("MASKING_SANITY_ENABLED", "true")
+    monkeypatch.setattr(
+        pipeline_module,
+        "check_sanity",
+        lambda *a, **k: SanityCheckResult(
+            leak_found=True, flags=[SanityFlag(kind="name", span=(0, 5))]
+        ),
+    )
+    embed_mock = MagicMock()
+    monkeypatch.setattr(pipeline_module, "store_embedding", embed_mock)
+
+    msg = _make_raw_message(db)
+    pipeline_module.process_message(db, msg.id)
+
+    embed_mock.assert_not_called()
+
+    claim = db.execute(select(Claim).where(Claim.raw_message_id == msg.id)).scalar_one()
+    audit = db.execute(
+        select(AuditTrail).where(
+            AuditTrail.claim_id == claim.id, AuditTrail.step == "embedding_skipped"
+        )
+    ).scalar_one()
+    assert audit.detail == {"reason": "masking_sanity_flag"}
+
+
+def test_embedding_failure_does_not_dead_letter_the_message(db, monkeypatch):
+    """An embedding failure costs searchability, not triage.
+
+    If this regresses, a model outage starts draining the human review queue
+    into dead_letter - the exact failure step_extract was written to avoid.
+    """
+    monkeypatch.setenv("MASKING_SANITY_ENABLED", "false")
+    monkeypatch.setattr(pipeline_module, "extract", lambda *a, **k: FAKE_EXTRACTION)
+
+    def _boom(*args, **kwargs):
+        raise RuntimeError("model unavailable")
+
+    monkeypatch.setattr(pipeline_module, "store_embedding", _boom)
+
+    msg = _make_raw_message(db)
+    pipeline_module.process_message(db, msg.id)
+
+    db.refresh(msg)
+    assert msg.status != "dead_letter"
+
+    claim = db.execute(select(Claim).where(Claim.raw_message_id == msg.id)).scalar_one()
+    assert claim.status == "in_human_review"
+
+    audit = db.execute(
+        select(AuditTrail).where(
+            AuditTrail.claim_id == claim.id, AuditTrail.step == "embedding_error"
+        )
+    ).scalar_one()
+    assert "model unavailable" in audit.detail["error"]
+
+
+def test_embedding_runs_even_when_extraction_fails(db, monkeypatch):
+    """The two steps are independent, which is why step_embed sits in
+    process_message rather than inside step_extract. A claim nobody could
+    extract is still a claim an operator may ask about."""
+    monkeypatch.setenv("MASKING_SANITY_ENABLED", "false")
+
+    def _extraction_boom(*args, **kwargs):
+        raise RuntimeError("openai down")
+
+    monkeypatch.setattr(pipeline_module, "extract", _extraction_boom)
+    _use_real_store_with_stub_encoder(monkeypatch)
+
+    msg = _make_raw_message(db)
+    pipeline_module.process_message(db, msg.id)
+
+    claim = db.execute(select(Claim).where(Claim.raw_message_id == msg.id)).scalar_one()
+    assert "extraction" not in claim.data
+
+    row = db.execute(select(ClaimEmbedding).where(ClaimEmbedding.claim_id == claim.id)).scalar_one()
+    assert len(row.embedding) == EMBEDDING_DIMENSIONS

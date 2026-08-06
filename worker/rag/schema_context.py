@@ -65,7 +65,8 @@ Tablo: audit_trail  (pipeline denetim izi — adım süreleri, hatalar)
   claim_id        bigint    -> claims_flat.id
   step            text      'masking' | 'masking_sanity' | 'classification' | 'routing'
                             | 'extraction' | 'extraction_error' | 'extraction_skipped'
-                            | 'validation' | 'queue_approve' | 'queue_reject'
+                            | 'validation' | 'embedding' | 'embedding_error'
+                            | 'embedding_skipped' | 'queue_approve' | 'queue_reject'
   provider        text      LLM sağlayıcı, örn. 'openai'
   duration_ms     integer   adımın süresi
   created_at      timestamptz
