@@ -17,6 +17,7 @@ from worker.extraction.extractor import extract
 from worker.masking.pipeline import mask_all
 from worker.masking.sanity import SanityCheckResult, check_sanity, is_sanity_enabled
 from worker.masking.unmask import unmask_data
+from worker.routing.auto_approve import evaluate
 from worker.validation.validator import validate
 
 logger = logging.getLogger("worker.pipeline")
@@ -257,7 +258,16 @@ def step_extract(db: Session, msg: RawMessage, claim: Claim, masked_text: str) -
         ]
         unmasked_extraction = unmask_data(result.extraction, mapping_dicts)
 
-        claim.data = {**(claim.data or {}), "extraction": unmasked_extraction}
+        claim.data = {
+            **(claim.data or {}),
+            "extraction": unmasked_extraction,
+            # Stored on the claim, not only in the audit row below. This is the
+            # hallucination check's output - the fields whose quote could not be
+            # found in the source text - and the auto-approval gate reads it,
+            # which means it has to travel with the claim rather than sit in a
+            # row someone would have to go looking for.
+            "unverified_fields": result.unverified_fields,
+        }
 
         log_audit(
             db,
@@ -302,6 +312,53 @@ def step_validate(
         raw_message_id=msg.id,
         claim_id=claim.id,
         detail={"flag_count": len(flags), "flags": flags},
+    )
+
+
+def step_auto_approve(db: Session, msg: RawMessage, claim: Claim) -> None:
+    """The state machine's last transition: approve, or leave it for a human.
+
+    Runs last, after extraction, validation and embedding, because it is the
+    only step whose input is everything the others produced.
+
+    An audit row is written either way, the same arrangement masking sanity uses.
+    "Why did this need a human" is the question the error centre and the
+    precision measurement both ask, and answering it only for the claims that
+    passed would leave the interesting half unrecorded.
+    """
+    data = claim.data or {}
+    decision = evaluate(
+        content_type=claim.content_type,
+        urgency=claim.urgency,
+        validation_flags=data.get("validation_flags") or [],
+        unverified_fields=data.get("unverified_fields") or [],
+        has_sanity_flags=bool(data.get("masking_sanity_flags")),
+        extraction_present=bool(data.get("extraction")),
+    )
+
+    if decision.approved:
+        # claim.status only. RawMessage.status is the pipeline's own progress
+        # ('received' | 'masked' | 'classified' | 'dead_letter', as
+        # worker/rag/schema_context.py documents it to the SQL model), and
+        # approval is a fact about the claim, not about how far the message got.
+        # It is also the same transition /queue/{id}/approve performs, so both
+        # routes into `approved` mean one thing.
+        claim.status = "approved"
+
+    log_audit(
+        db,
+        "auto_approve",
+        raw_message_id=msg.id,
+        claim_id=claim.id,
+        detail={
+            "approved": decision.approved,
+            "reasons": decision.reasons,
+            "blocking_flags": decision.blocking_flags,
+            # Recorded even though they changed nothing: a rule sitting in the
+            # advisory set is a judgement that has to stay visible, and the
+            # measurement that moves rules between the two sets reads this.
+            "advisory_flags": decision.advisory_flags,
+        },
     )
 
 
@@ -359,6 +416,7 @@ def process_message(db: Session, raw_message_id: int) -> None:
         claim = step_route(db, msg, masked_text, classification, sanity_result)
         step_extract(db, msg, claim, masked_text)
         step_embed(db, msg, claim, masked_text)
+        step_auto_approve(db, msg, claim)
         db.commit()
         logger.info(f"raw_message_id={raw_message_id} | pipeline completed | status={msg.status}")
     except Exception as e:

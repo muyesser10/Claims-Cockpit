@@ -532,6 +532,138 @@ def test_the_test_stub_still_applies_the_injury_rule(db, monkeypatch):
     assert _audit(db, "classification", msg.id).detail["urgency_source"] == INJURY_OVERRIDE
 
 
+# An extraction that survives every validation rule. FAKE_EXTRACTION does not:
+# with plate and incident_date both null it trips claim_missing_core_fields,
+# which is the right behaviour and the wrong fixture for testing approval.
+VALID_EXTRACTION = ExtractionResult(
+    extraction={
+        "policy_no": "POL-2026-00001",
+        "plate": "34 ABC 123",
+        "incident_date": "2026-07-15",
+        "damage_type": "collision",
+        "injury": False,
+        "counterparty_exists": True,
+        "estimated_amount": 12500.0,
+    },
+    reasoning="test",
+    model="gpt-4o-mini",
+    duration_ms=1,
+    unverified_fields=[],
+)
+
+
+def _clean_extraction(db, monkeypatch) -> None:
+    """A message that reaches auto-approval with nothing against it."""
+    monkeypatch.setenv("MASKING_SANITY_ENABLED", "false")
+    monkeypatch.setattr(pipeline_module, "extract", lambda *a, **k: VALID_EXTRACTION)
+    _stub_classify(monkeypatch, _classification())
+
+
+def test_auto_approval_is_off_unless_switched_on(db, monkeypatch):
+    """It ships closed: §7 asks for >= 95% precision and no run has measured
+    it yet."""
+    monkeypatch.delenv("AUTO_APPROVE_ENABLED", raising=False)
+    _clean_extraction(db, monkeypatch)
+
+    msg = _make_raw_message(db)
+    pipeline_module.process_message(db, msg.id)
+
+    claim = db.execute(select(Claim).where(Claim.raw_message_id == msg.id)).scalar_one()
+    assert claim.status == "in_human_review"
+    assert _audit(db, "auto_approve", msg.id).detail["reasons"] == ["auto_approve_disabled"]
+
+
+def test_a_clean_claim_is_approved_when_the_gate_is_open(db, monkeypatch):
+    monkeypatch.setenv("AUTO_APPROVE_ENABLED", "true")
+    _clean_extraction(db, monkeypatch)
+
+    msg = _make_raw_message(db)
+    pipeline_module.process_message(db, msg.id)
+
+    claim = db.execute(select(Claim).where(Claim.raw_message_id == msg.id)).scalar_one()
+    assert claim.status == "approved"
+
+    detail = _audit(db, "auto_approve", msg.id).detail
+    assert detail["approved"] is True
+    assert detail["reasons"] == []
+
+
+def test_a_critical_claim_is_never_auto_approved(db, monkeypatch):
+    monkeypatch.setenv("AUTO_APPROVE_ENABLED", "true")
+    monkeypatch.setenv("MASKING_SANITY_ENABLED", "false")
+    monkeypatch.setattr(pipeline_module, "extract", lambda *a, **k: FAKE_EXTRACTION)
+    _stub_classify(monkeypatch, _classification(urgency=Urgency.CRITICAL))
+
+    msg = _make_raw_message(db)
+    pipeline_module.process_message(db, msg.id)
+
+    claim = db.execute(select(Claim).where(Claim.raw_message_id == msg.id)).scalar_one()
+    assert claim.status == "in_human_review"
+    assert "critical_urgency" in _audit(db, "auto_approve", msg.id).detail["reasons"]
+
+
+def test_an_unverified_field_keeps_the_claim_in_the_queue(db, monkeypatch):
+    """The gate reads unverified_fields off the claim, which is why
+    step_extract stores them there and not only in its audit row."""
+    monkeypatch.setenv("AUTO_APPROVE_ENABLED", "true")
+    monkeypatch.setenv("MASKING_SANITY_ENABLED", "false")
+    monkeypatch.setattr(
+        pipeline_module,
+        "extract",
+        lambda *a, **k: ExtractionResult(
+            extraction={"policy_no": None},
+            reasoning="test",
+            model="gpt-4o-mini",
+            duration_ms=1,
+            unverified_fields=["estimated_amount"],
+        ),
+    )
+    _stub_classify(monkeypatch, _classification())
+
+    msg = _make_raw_message(db)
+    pipeline_module.process_message(db, msg.id)
+
+    claim = db.execute(select(Claim).where(Claim.raw_message_id == msg.id)).scalar_one()
+    assert claim.data["unverified_fields"] == ["estimated_amount"]
+    assert claim.status == "in_human_review"
+    assert "unverified_fields" in _audit(db, "auto_approve", msg.id).detail["reasons"]
+
+
+def test_a_claim_whose_extraction_failed_is_never_approved(db, monkeypatch):
+    monkeypatch.setenv("AUTO_APPROVE_ENABLED", "true")
+    monkeypatch.setenv("MASKING_SANITY_ENABLED", "false")
+
+    def _extraction_boom(*args, **kwargs):
+        raise RuntimeError("openai down")
+
+    monkeypatch.setattr(pipeline_module, "extract", _extraction_boom)
+    _stub_classify(monkeypatch, _classification())
+
+    msg = _make_raw_message(db)
+    pipeline_module.process_message(db, msg.id)
+
+    claim = db.execute(select(Claim).where(Claim.raw_message_id == msg.id)).scalar_one()
+    assert claim.status == "in_human_review"
+    assert "no_extraction" in _audit(db, "auto_approve", msg.id).detail["reasons"]
+
+
+def test_the_audit_row_is_written_for_held_claims_too(db, monkeypatch):
+    """'Why did this need a human' is what the error centre and the precision
+    measurement both ask; recording only the approvals would leave the
+    interesting half unrecorded."""
+    monkeypatch.setenv("AUTO_APPROVE_ENABLED", "true")
+    monkeypatch.setenv("MASKING_SANITY_ENABLED", "false")
+    monkeypatch.setattr(pipeline_module, "extract", lambda *a, **k: FAKE_EXTRACTION)
+    _stub_classify(monkeypatch, _classification(content_type=ContentType.IRRELEVANT))
+
+    msg = _make_raw_message(db)
+    pipeline_module.process_message(db, msg.id)
+
+    detail = _audit(db, "auto_approve", msg.id).detail
+    assert detail["approved"] is False
+    assert "not_a_claim" in detail["reasons"]
+
+
 def test_fallback_source_is_named_when_nothing_fired(db, monkeypatch):
     """FALLBACK and INJURY_OVERRIDE are different stories about one claim, and
     an eval run has to be able to tell them apart."""
