@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuestion } from "../api/useQuestion";
 import SourceChip from "../components/SourceChip";
+import ErrorScreen from "../components/ErrorScreen";
 
 const modeLabels: Record<string, string> = {
   sql: "SQL",
@@ -10,12 +11,17 @@ const modeLabels: Record<string, string> = {
 
 export default function Question() {
   const [input, setInput] = useState("");
+  // Tekrar denerken input'taki metin değil, gerçekten sorulan soru gönderilmeli
+  // — kullanıcı hata ekranını görürken kutuyu düzenlemiş olabilir.
+  const [askedQuestion, setAskedQuestion] = useState<string | null>(null);
   const { mutate, data, isPending, isError, error } = useQuestion();
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!input.trim()) return;
-    mutate(input.trim());
+    const question = input.trim();
+    setAskedQuestion(question);
+    mutate(question);
   }
 
   return (
@@ -42,10 +48,15 @@ export default function Question() {
         <p className="text-slate-500">Cevap hazırlanıyor, bu 8-20 saniye sürebilir...</p>
       )}
 
+      {/* compact: form sayfanın asıl işi, hata onun altındaki cevap alanını
+          kaplıyor — tam sayfa görünüm soru kutusunu gereksizce itelerdi. */}
       {isError && (
-        <p className="text-red-600">
-          Bir hata oluştu: {error instanceof Error ? error.message : "Bilinmeyen hata"}
-        </p>
+        <ErrorScreen
+          compact
+          title="Cevap alınamadı"
+          message={error instanceof Error ? error.message : "Bilinmeyen hata"}
+          onRetry={askedQuestion ? () => mutate(askedQuestion) : undefined}
+        />
       )}
 
       {data && !data.answerable && (

@@ -33,6 +33,7 @@
 - [x] **Onay kuyruğu ekranı (S2-7)** — liste + detay paneli, düzenlenebilir extraction alanları, validation_flags gösterimi, onayla (edits/diff) / reddet (iki adımlı)
 - [x] **Kuyruk klavye UX (S3-4)** — `a`=onayla (düzenlemesiz hızlı onay), `r`=reddet (iki adımlı onay korunuyor), onay/red sonrası otomatik sıradaki kayda geçiş (taze cache'ten, polling yarış durumu ele alındı), `?` yardım overlay'i. Harici kütüphane eklenmedi.
 - [x] **Pano tam görünüm (S3-5)** — @nursenakyga. StatCards/UrgencyDonut/CityBar + yeni TrendChart/Pulse bileşenleri, `/istatistik/ozet` trend sorgusu eklendi.
+- [x] **Hata gösterimi + ErrorBoundary (S4-9)** — paylaşılan `ErrorScreen` (tam sayfa + `compact` varyant, opsiyonel retry) ve class-based `ErrorBoundary` tüm route ağacını sarıyor (beyaz ekran yerine hata kartı). Pano (iki sorgunun bağımsızlığı korunarak ayrı ayrı), Kuyruk ve Soru bağlandı; Metrikler'de henüz sorgu yok. react-router'ın `errorElement`'i kullanılmadı — BrowserRouter+Routes data router değil, prop sessizce yok sayılırdı. `auth.ts` artık ağ hatasını Türkçeleştiriyor (çıplak "Failed to fetch" yerine). Yeni route eklenmedi: "/hata" kavramsal isim, Hata Merkezi ekranı ayrı iş ve DLQ endpoint'ini bekliyor.
 - [x] **Kaynak cümle vurgulama (S2-12)** — @nursenakyga. `SourceHighlight.tsx`, offset tabanlı, kanıtsız alanlarda savunmacı (çökmüyor).
 - [x] worker gerçek Redis tüketicisi + pipeline (S1-5), extraction+validation pipeline entegrasyonu — @nursenakyga
 - [x] **S3-6 — Soru-cevap arayüzü + kaynak çipleri (mock)** — @nursenakyga.Çağrı'nın dondurduğu sözleşmeye (question/answer/mode/answerable/
@@ -127,6 +128,7 @@ Tüm maddeler tamamlandı (masking v1, GT üreteci, worker pipeline, LLM client+
 - worker `depends_on: service_started` (service_healthy değil) — DB hazır olmadan bağlanma riski, düzeltilmedi.
 - Yerel Postgres çakışması (bariss9): db override ile 5433'te (kişisel, gitignore'da).
 - Ollama servisi fiilen ölü (ADR-001 sonrası), kaldırma kararı hâlâ açık.
+- **Catch-all route yok** — `App.tsx`'te `path="*"` tanımlı değil, bilinmeyen URL boş sayfa gösteriyor (hata değil, eşleşmeme; ErrorBoundary bunu yakalamaz). `ErrorScreen` hazır, tek satırlık route eklemek yeterli — S4-9 kapsamı dışında bırakıldı — @bariss9
 
 ---
 
