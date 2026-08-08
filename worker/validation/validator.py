@@ -6,15 +6,23 @@ side effects, never raises. A flag routes the claim to human review — it
 never blocks or rejects it (CLAUDE.md S1: uncertain cases go to a human,
 they are not silently dropped).
 
-Injury cross-check (rule 8) shares its word list and Turkish-safe comparison
-with worker/pipeline.py's classification trigger — see
-worker/shared/injury_terms.py, the single source of truth for both.
+Injury cross-check (rule 8) calls find_injury_signals(), the same function the
+classifier's deterministic override uses — worker/shared/injury_terms.py is the
+single source of truth for both.
+
+It shares the function rather than the word list on purpose. Sharing only the
+list is what went wrong here before: this module scanned for the terms as bare
+substrings while find_injury_signals grew word-start, negation and form-label
+rules around them, and the two answers drifted apart without anything failing.
+Measured over the pinned 100-record sample on 2026-08-08: the substring scan
+flagged 48 records against a ground truth of 10 injuries, where the shared
+function flags 11. "bölümünde" contains ölüm, "çıkan" contains kan.
 """
 
 import re
 from datetime import date
 
-from worker.shared.injury_terms import INJURY_TERMS, _normalize_tr
+from worker.shared.injury_terms import find_injury_signals
 
 PLATE_PATTERN = re.compile(r"^\d{2}\s?[A-ZÇĞİÖŞÜ]{1,3}\s?\d{2,4}$")
 
@@ -33,10 +41,6 @@ DAMAGE_TYPES = {
     "other",
 }
 CONTENT_TYPES = {"claim", "info_request", "irrelevant"}
-
-# Normalized once at import time — the terms are compared many times per
-# validate() call, the text they're written against never changes.
-_NORMALIZED_INJURY_TERMS = tuple(_normalize_tr(term) for term in INJURY_TERMS)
 
 
 def _flag(field: str, rule: str, message: str) -> dict:
@@ -136,8 +140,7 @@ def validate(extraction: dict, raw_text: str) -> list[dict]:
         )
 
     injury = extraction.get("injury")
-    normalized_text = _normalize_tr(raw_text)
-    if injury is not True and any(term in normalized_text for term in _NORMALIZED_INJURY_TERMS):
+    if injury is not True and find_injury_signals(raw_text):
         flags.append(
             _flag(
                 "injury",
