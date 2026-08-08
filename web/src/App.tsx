@@ -7,6 +7,7 @@ import Metrics from './pages/Metrics';
 import Login from './pages/Login';
 import ErrorBoundary from './components/ErrorBoundary';
 import { isAuthenticated, logout } from './api/auth';
+import ErrorScreen from './components/ErrorScreen';
 
 const navItems = [
   { to: "/", label: "Pano" },
@@ -107,6 +108,15 @@ export default function App() {
                 <Metrics />
               </Shell>
             </RequireAuth>
+          }
+        />
+        <Route
+          path="*"
+          element={
+            <ErrorScreen
+              title="Sayfa bulunamadı"
+              message="Bu adres tanınmıyor."
+            />
           }
         />
       </Routes>
