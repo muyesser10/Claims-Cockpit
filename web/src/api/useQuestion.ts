@@ -8,7 +8,7 @@ export interface QuestionSource {
   external_ref: string | null;
   snippet: string;
   score: number | null;
-  urgency: "critical" | "high" | "normal";
+  urgency: "critical" | "high" | "normal" | null; 
   incident_date: string | null;
 }
 
