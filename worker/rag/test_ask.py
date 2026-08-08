@@ -11,6 +11,7 @@ one of them fails.
 import pytest
 from sqlalchemy.exc import OperationalError
 
+from worker.llm.client import ModelTier, get_llm_client
 from worker.rag import ask as ask_module
 from worker.rag.answer import RagAnswer
 from worker.rag.ask import (
@@ -18,11 +19,13 @@ from worker.rag.ask import (
     EXECUTION_FAILED_REFUSAL,
     GENERATION_FAILED_REFUSAL,
     ask,
+    normalize_question,
 )
 from worker.rag.retrieval import RetrievedClaim
-from worker.rag.router import QuestionRoute
+from worker.rag.router import QuestionRoute, Route
 from worker.rag.schema import SqlQuery
 from worker.rag.sql_answer import SqlNarration
+from worker.rag.sql_guard import check
 
 STUB_MODEL = "gpt-4o-mini-stub"
 
@@ -454,3 +457,157 @@ def test_duration_covers_the_whole_question_not_one_step(db, monkeypatch):
 
     assert result.duration_ms >= 0
     assert db.added[0].duration_ms == result.duration_ms
+
+
+# --- DEMO_OFFLINE (S4-6) -------------------------------------------------
+#
+# These go through the real get_llm_client() and the committed demo/fixtures/
+# set, not StubClient: what is under test is whether a demo question finds its
+# recorded answer, which a stub would answer by construction.
+
+DEMO_SQL_QUESTIONS = [
+    "Kaç tane kritik ihbar var?",
+    "Hangi şehirlerde en çok hasar bildirimi var?",
+    "Kaç tane dolu hasarı bildirildi?",
+]
+
+DEMO_RETRIEVAL_QUESTIONS = [
+    "Camı kırılan bir araç var mı?",
+    "Yaralanmalı bir kaza var mı, ne olmuş?",
+]
+
+
+@pytest.fixture
+def demo_offline(monkeypatch):
+    monkeypatch.setenv("DEMO_OFFLINE", "true")
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+
+
+def _recorded(question: str, response_model):
+    """What the offline client answers for `question` and this model."""
+    client = get_llm_client(external_ref=normalize_question(question))
+    return client.structured(
+        tier=ModelTier.CHEAP,
+        response_model=response_model,
+        system_prompt="prompt",
+        user_content=f"SORU: {question}",
+        message_id="q1",
+    )
+
+
+def test_normalize_question_strips_and_lowercases():
+    assert normalize_question("  Kaç Tane Kritik İhbar Var?  ") == "kaç tane kritik i̇hbar var?"
+    assert normalize_question("abc") == "abc"
+    assert normalize_question("") == ""
+
+
+def test_normalize_question_is_what_the_fixtures_were_keyed_with():
+    """The builder calls this same function; a change here invalidates the set."""
+    assert normalize_question("Kaç tane kritik ihbar var?") == "kaç tane kritik ihbar var?"
+
+
+@pytest.mark.parametrize("question", DEMO_SQL_QUESTIONS)
+def test_a_demo_sql_question_is_routed_to_sql(question, demo_offline):
+    assert _recorded(question, QuestionRoute).route is Route.SQL
+
+
+@pytest.mark.parametrize("question", DEMO_RETRIEVAL_QUESTIONS)
+def test_a_demo_retrieval_question_is_routed_to_retrieval(question, demo_offline):
+    assert _recorded(question, QuestionRoute).route is Route.RETRIEVAL
+
+
+@pytest.mark.parametrize("question", DEMO_SQL_QUESTIONS + DEMO_RETRIEVAL_QUESTIONS)
+def test_case_and_padding_do_not_lose_the_recorded_answer(question, demo_offline):
+    """A question typed live arrives with a stray space or a capital."""
+    typed = f"  {question.capitalize()}  "
+
+    assert _recorded(typed, QuestionRoute).route is _recorded(question, QuestionRoute).route
+
+
+@pytest.mark.parametrize("question", DEMO_SQL_QUESTIONS)
+def test_recorded_sql_passes_the_real_guard(question, demo_offline):
+    """The canned query is vetted, not trusted - guard bounds it like any other."""
+    reply = _recorded(question, SqlQuery)
+
+    assert reply.answerable is True
+    safe_sql = check(reply.sql)
+    assert "claims_flat" in safe_sql
+    assert "LIMIT 100" in safe_sql
+
+
+def test_the_injury_question_carries_the_critical_filter(demo_offline):
+    """Without it the nearest hits are not injury records - see the builder."""
+    route = _recorded("Yaralanmalı bir kaza var mı, ne olmuş?", QuestionRoute)
+
+    assert route.urgency == "critical"
+
+
+def test_an_unknown_question_falls_back_to_the_wildcard(demo_offline):
+    route = _recorded("Bugün hava nasıl?", QuestionRoute)
+    reply = _recorded("Bugün hava nasıl?", RagAnswer)
+
+    # Retrieval, never SQL: a canned query would answer a different question.
+    assert route.route is Route.RETRIEVAL
+    assert reply.answerable is False
+    assert "bu demo için hazırlanmamış" in reply.refusal_reason
+
+
+class RecordingSession(FakeSession):
+    """A session that records what run_query actually sent to the database."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.statements: list[str] = []
+
+    def execute(self, statement):
+        self.statements.append(str(statement))
+        return _EmptyResult()
+
+
+class _EmptyResult:
+    def mappings(self):
+        return []
+
+
+def test_offline_sql_reaches_the_database_layer_unmocked(db, demo_offline, monkeypatch):
+    """run_query is not stubbed here: the recorded SQL has to travel the real
+    path, guard included, and arrive at the session as the guard rewrote it.
+
+    This is the half of Cagri's condition that the fixtures must not shortcut -
+    the query really runs, so the numbers on screen come from the database and
+    not from the fixture.
+    """
+    sql_db = RecordingSession()
+
+    ask(db, "Kaç tane kritik ihbar var?", question_id="q1", sql_db=sql_db)
+
+    executed = [s for s in sql_db.statements if "claims_flat" in s]
+    assert len(executed) == 1
+    assert executed[0] == (
+        "SELECT COUNT(*) AS kritik_ihbar_sayisi FROM claims_flat "
+        "WHERE urgency = 'critical' LIMIT 100"
+    )
+    # And the statement timeout still went out ahead of it.
+    assert any("statement_timeout" in s for s in sql_db.statements)
+
+
+def test_offline_retrieval_answer_cites_a_real_source(db, demo_offline, monkeypatch):
+    """The recorded answer's citation is checked against what retrieval found."""
+    _stub_search(monkeypatch, [_source(claim_id=53)])
+
+    result = ask(db, "Camı kırılan bir araç var mı?", question_id="q1")
+
+    assert result.answerable is True
+    assert result.mode == "retrieval"
+    assert [source.claim_id for source in result.sources] == [53]
+    assert "[1]" in result.answer
+
+
+def test_offline_unknown_question_refuses_without_crashing(db, demo_offline, monkeypatch):
+    _stub_search(monkeypatch, [_source()])
+
+    result = ask(db, "Bugün hava nasıl?", question_id="q1")
+
+    assert result.answerable is False
+    assert "bu demo için hazırlanmamış" in result.refusal_reason
+    assert result.sources == []
