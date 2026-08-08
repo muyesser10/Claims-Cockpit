@@ -1,0 +1,5 @@
+# Shell scripts must keep LF endings whatever the checkout platform does.
+# migrations/init/01-create-readonly-role.sh is bind-mounted straight into the
+# postgres container; with CRLF the entrypoint fails on `\r: command not found`,
+# and the team develops on Windows with core.autocrlf=true.
+*.sh text eol=lf

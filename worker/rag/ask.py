@@ -80,12 +80,19 @@ def ask(
     client: LlmClient | None = None,
     encoder: Encoder | None = None,
     seed: int | None = None,
+    sql_db: Session | None = None,
     audit: bool = True,
 ) -> QuestionAnswer:
     """Answer `question`, by whichever path the router picks.
 
     One LlmClient is built here and threaded through every step, so a question
     costs one client rather than three, and one place decides the model.
+
+    `sql_db` is the session generated SQL runs on. The rag service passes a
+    second connection there, one that authenticates as rag_readonly and can see
+    nothing but claims_flat and audit_trail (rag/readonly.py). Left unset it
+    falls back to `db`, which is what an eval run and every existing caller do:
+    the isolation is a deployment property, not something ask() depends on.
 
     `audit=False` is for eval runs: a thousand scored questions should not land
     in the operator's error centre as a thousand audit rows.
@@ -105,7 +112,9 @@ def ask(
     )
 
     if route.route is Route.SQL:
-        outcome = _answer_with_sql(db, question, question_id=question_id, client=client, seed=seed)
+        outcome = _answer_with_sql(
+            sql_db or db, question, question_id=question_id, client=client, seed=seed
+        )
     else:
         outcome = _answer_with_retrieval(
             db,
@@ -136,7 +145,7 @@ def ask(
 
 
 def _answer_with_sql(
-    db: Session,
+    sql_db: Session,
     question: str,
     *,
     question_id: str,
@@ -144,6 +153,10 @@ def _answer_with_sql(
     seed: int | None,
 ) -> _Outcome:
     """Text-to-SQL: generate, vet, run, narrate.
+
+    `sql_db` is whatever ask() decided the query may run on - the read-only
+    connection in the rag service, the caller's own session everywhere else.
+    Nothing in this function writes, which is what makes that substitution safe.
 
     Three ways this ends without an answer, kept apart because they are not the
     same event. The model declining is correct behaviour. The guard rejecting
@@ -177,11 +190,13 @@ def _answer_with_sql(
         )
 
     try:
-        rows = run_query(db, generated.sql)
+        rows = run_query(sql_db, generated.sql)
     except SQLAlchemyError as exc:
-        # Roll back before anything else: a failed statement poisons the
-        # transaction, and the audit write below would fail too.
-        db.rollback()
+        # A failed statement poisons its transaction until something rolls it
+        # back, and this session goes back to a pool. It no longer protects the
+        # audit write - that runs on the api's own session now, a different
+        # connection - but the rollback is still this branch's to do.
+        sql_db.rollback()
         log.error(
             "rag_sql_execution_failed",
             question_id=question_id,
