@@ -24,7 +24,7 @@ from pathlib import Path
 
 from pydantic import BaseModel
 
-from worker.llm.client import LlmClient, ModelTier
+from worker.llm.client import LlmClient, ModelTier, get_llm_client
 
 logger = logging.getLogger("worker.masking.sanity")
 
@@ -104,6 +104,7 @@ def check_sanity(
     masked_text: str,
     *,
     message_id: str,
+    external_ref: str | None = None,
     client: LlmClient | None = None,
     tier: ModelTier = ModelTier.CHEAP,
     seed: int | None = None,
@@ -114,6 +115,11 @@ def check_sanity(
     LlmClient.structured() (no default) and is how every llm_call log line
     ties back to a raw_message_id (CLAUDE.md §2) — the pipeline passes
     str(msg.id), same as worker/extraction/extractor.py's extract().
+
+    `external_ref` is the other identifier, and it exists for a different
+    reason: `message_id` is this database's row id, while `external_ref` is the
+    gt_id replay wrote onto the message. Offline (DEMO_OFFLINE) it selects the
+    recorded verdict for this record; online nothing reads it.
 
     `seed` follows the same pattern as worker/extraction/extractor.py's
     extract(): unset for the live pipeline, pinned by eval runs that need
@@ -131,7 +137,7 @@ def check_sanity(
     started = time.perf_counter()
 
     try:
-        client = client or LlmClient()
+        client = client or get_llm_client(external_ref=external_ref)
     except Exception as exc:
         duration_ms = round((time.perf_counter() - started) * 1000)
         logger.error(
