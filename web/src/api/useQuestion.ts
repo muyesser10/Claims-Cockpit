@@ -11,7 +11,7 @@ export interface QuestionSource {
   // Nullable: Claim.urgency is nullable in the database, so a claim that never
   // made it past classification comes back without one. SourceChip falls back
   // to a neutral dot rather than indexing undefined.
-  urgency: string | null;
+  urgency: "critical" | "high" | "normal" | null;
   incident_date: string | null;
 }
 
