@@ -1,3 +1,11 @@
+# Host ports are ${VAR:-default} so a machine that already runs Postgres or
+# Redis can move them from .env instead of needing a docker-compose.override.yml
+# (which is gitignored, so a new clone never has one). See docs/runbook.md.
+#
+# No container_name anywhere on purpose: a fixed name makes `docker compose up`
+# fail outright when a container of that name is left over from another clone or
+# an older run. Compose's generated <project>-<service>-<n> is unique per
+# project, and `docker compose logs <service>` reaches it by service name.
 services:
   db:
     image: pgvector/pgvector:pg16
@@ -8,7 +16,7 @@ services:
       # Read by the init script below. Empty means "skip the role", which the
       # script says out loud rather than failing.
       RAG_READONLY_DB_PASSWORD: ${RAG_READONLY_DB_PASSWORD:-}
-    ports: ["5432:5432"]
+    ports: ["${POSTGRES_HOST_PORT:-5432}:5432"]
     volumes:
       - db_data:/var/lib/postgresql/data
       # rag_readonly, the role the Text-to-SQL path runs queries as. The
@@ -23,7 +31,7 @@ services:
 
   redis:
     image: redis:7-alpine
-    ports: ["6379:6379"]
+    ports: ["${REDIS_HOST_PORT:-6379}:6379"]
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -38,15 +46,22 @@ services:
     env_file: .env
     ports: ["8000:8000"]
     volumes:
-      - ./api:/app/api      #live-reload on code changes      
+      - ./api:/app/api      #live-reload on code changes
     depends_on:
      db: { condition: service_healthy }
      redis: { condition: service_healthy }
-  
-  
+     # /soru proxies to the rag service (api/routers/question.py), so rag is
+     # started first. Deliberately service_started and not service_healthy:
+     # rag is only healthy once the embedding model is loaded, measured at 42s
+     # on a cold hf_cache, and waiting for that would hold back Pano, Kuyruk and
+     # Metrikler too - screens that never touch rag. The Soru screen answers 503
+     # with a Turkish message during that window (question.py handles an
+     # unreachable rag), which is the better trade than a blank cockpit.
+     rag: { condition: service_started }
+
+
   ollama:
     image: ollama/ollama:latest
-    container_name: claims_ollama
     ports:
       - "11434:11434"
     volumes:
@@ -58,12 +73,15 @@ services:
     build:
       context: .
       dockerfile: worker/Dockerfile
-    container_name: claims_worker
     env_file:
       - .env
     environment:
       - OLLAMA_HOST=http://ollama:11434
-    ports: ["9100:9100"]  # prometheus_client.start_http_server — worker/metrics.py
+    ports: ["${WORKER_METRICS_HOST_PORT:-9100}:9100"]  # prometheus_client.start_http_server — worker/metrics.py
+    volumes:
+      # Shared with rag: both embed with the same e5 model, and without a volume
+      # each container re-downloads 471 MB on every recreate.
+      - hf_cache:/root/.cache/huggingface
     depends_on:
       - db
       - redis
@@ -75,7 +93,6 @@ services:
     build:
       context: ./web
       dockerfile: Dockerfile
-    container_name: claims_web
     ports:
       - "5173:5173"
     environment:
@@ -96,7 +113,6 @@ services:
     build:
       context: .
       dockerfile: worker/Dockerfile
-    container_name: claims_rag
     command: ["uvicorn", "rag.main:app", "--host", "0.0.0.0", "--port", "8100"]
     env_file:
       - .env
@@ -104,6 +120,27 @@ services:
     # it would put a read path into claim data on the host, and /ingest's
     # deliberate auth exemption is the one precedent nobody wants repeated.
     expose: ["8100"]
+    volumes:
+      - hf_cache:/root/.cache/huggingface
+    # python -c rather than curl or wget: the image is python:3.11-slim, which
+    # ships neither. The endpoint reports model_ready separately from liveness
+    # (rag/main.py), and this checks that field - a process answering HTTP while
+    # the model is still loading is not ready to take a question.
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - |
+          import json, sys, urllib.request
+          body = urllib.request.urlopen("http://localhost:8100/health", timeout=4).read()
+          sys.exit(0 if json.loads(body).get("model_ready") else 1)
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      # The model load is a 471 MB download on a cold hf_cache and ~26s even
+      # when cached. Failures inside this window do not count against retries.
+      start_period: 45s
     depends_on:
       db: { condition: service_healthy }
     restart: always
@@ -111,7 +148,6 @@ services:
   # 8. PROMETHEUS + GRAFANA  (S3-9 observability)
   prometheus:
     image: prom/prometheus:latest
-    container_name: claims_prometheus
     ports: ["9090:9090"]
     volumes:
       - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
@@ -122,7 +158,6 @@ services:
 
   grafana:
     image: grafana/grafana:latest
-    container_name: claims_grafana
     ports: ["3000:3000"]
     environment:
       - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
@@ -136,3 +171,5 @@ services:
 volumes:
   db_data:
   ollama_data:
+  # The sentence-transformers / HF hub cache, shared by worker and rag.
+  hf_cache:
