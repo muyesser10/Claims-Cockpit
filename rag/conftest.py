@@ -25,6 +25,7 @@ from api.database import get_db  # noqa: E402
 from api.models.db import Base, User  # noqa: E402
 from api.security import create_access_token, hash_password  # noqa: E402
 from rag.main import app  # noqa: E402
+from rag.readonly import get_readonly_db  # noqa: E402
 
 
 @compiles(BigInteger, "sqlite")
@@ -49,7 +50,25 @@ def _override_get_db():
         db.close()
 
 
+def _override_get_readonly_db():
+    """The SQL path's session, pointed at the same in-memory database.
+
+    A second Postgres role has no SQLite equivalent, and these tests are not
+    where the grants get proven (that is docs/runbook.md's psql check). What is
+    worth asserting here is the wiring - that /soru hands the *read-only*
+    dependency to ask() and not the api's own session - so the session is
+    tagged and test_main.py reads the tag back.
+    """
+    db = TestingSessionLocal()
+    db.info["readonly"] = True
+    try:
+        yield db
+    finally:
+        db.close()
+
+
 app.dependency_overrides[get_db] = _override_get_db
+app.dependency_overrides[get_readonly_db] = _override_get_readonly_db
 
 
 @pytest.fixture(autouse=True)

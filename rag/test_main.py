@@ -163,6 +163,42 @@ def test_an_unexpected_failure_answers_in_turkish_and_is_logged(client, auth_hea
     assert response.json()["detail"] == "Soru işlenirken beklenmeyen bir hata oluştu."
 
 
+# --- the two sessions ----------------------------------------------------
+
+
+def test_the_sql_path_gets_the_readonly_session(client, auth_headers, stub_ask):
+    """/soru must hand ask() the rag_readonly connection, not the api's own.
+
+    The whole point of rag/readonly.py is that generated SQL runs somewhere that
+    cannot see the raw claims table. If this wiring is dropped the service keeps
+    working perfectly and quietly loses the isolation, so it is asserted rather
+    than left to review.
+    """
+    response = client.post("/soru", json={"question": "kaç ihbar var"}, headers=auth_headers)
+
+    assert response.status_code == 200
+    sql_db = stub_ask[0]["sql_db"]
+    # Tagged by conftest's get_readonly_db override; the plain get_db one is not.
+    assert sql_db.info.get("readonly") is True
+
+
+def test_the_audit_session_is_not_the_readonly_one(client, auth_headers, monkeypatch):
+    """The audit row is a write, so it must stay on the api's session."""
+    seen: dict = {}
+
+    def fake_ask(db, question, **kwargs):
+        seen["db"] = db
+        seen["sql_db"] = kwargs.get("sql_db")
+        return _answer(question=question)
+
+    monkeypatch.setattr(rag_main, "ask", fake_ask)
+
+    client.post("/soru", json={"question": "kaç ihbar var"}, headers=auth_headers)
+
+    assert seen["db"] is not seen["sql_db"]
+    assert seen["db"].info.get("readonly") is None
+
+
 # --- the shell itself ----------------------------------------------------
 
 

@@ -1,9 +1,14 @@
 # monitoring/prometheus.yml
 # S3-9 — scrape targets for the api (auto HTTP metrics + custom queue
-# gauges, both under GET /metrics) and worker (prometheus_client
-# start_http_server on :9100) services. Service names resolve via the
-# default docker-compose network, same as every other inter-service call
-# in this repo (e.g. DATABASE_URL uses `db`, not localhost).
+# gauges, both under GET /metrics), worker (prometheus_client
+# start_http_server on :9100) and rag (the same instrumentator the api
+# uses, rag/main.py) services. Service names resolve via the default
+# docker-compose network, same as every other inter-service call in this
+# repo (e.g. DATABASE_URL uses `db`, not localhost).
+#
+# rag publishes no host port (compose uses `expose`, deliberately - it is a
+# read path into claim data). That is no obstacle here: prometheus is on the
+# same network and reaches it by service name.
 
 global:
   scrape_interval: 15s
@@ -18,3 +23,8 @@ scrape_configs:
     metrics_path: /metrics
     static_configs:
       - targets: ["worker:9100"]
+
+  - job_name: "claims-cockpit-rag"
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["rag:8100"]

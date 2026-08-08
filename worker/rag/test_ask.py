@@ -276,6 +276,102 @@ def test_an_invented_number_is_withheld_by_the_narrator(db, monkeypatch):
     assert result.row_count == 1
 
 
+# --- which session the query runs on -------------------------------------
+
+
+def _stub_run_query_recording(monkeypatch, rows: list[dict] | None = None) -> list:
+    """Record the session run_query was handed."""
+    sessions: list = []
+
+    def fake_run_query(db, sql):
+        sessions.append(db)
+        return rows or []
+
+    monkeypatch.setattr(ask_module, "run_query", fake_run_query)
+    return sessions
+
+
+def test_without_sql_db_the_query_runs_on_the_caller_session(db, monkeypatch):
+    """The regression guard for eval and every pre-existing caller.
+
+    ask() grew a `sql_db` parameter so the rag service can run generated SQL as
+    rag_readonly. Callers that do not pass one - eval/, the tests above - must
+    keep the single-session behaviour they had.
+    """
+    sessions = _stub_run_query_recording(monkeypatch, rows=[{"n": 12}])
+    client = StubClient(
+        QuestionRoute=_route(route="sql"),
+        SqlQuery=_sql_query(),
+        SqlNarration=_narration(),
+    )
+
+    result = ask(db, "kaç ihbar var", question_id="q1", client=client)
+
+    assert sessions == [db]
+    assert result.answerable is True
+    # And the audit row still lands on that same session.
+    assert db.commits == 1
+
+
+def test_sql_db_takes_over_the_query_but_not_the_audit_write(db, monkeypatch):
+    sql_db = FakeSession()
+    sessions = _stub_run_query_recording(monkeypatch, rows=[{"n": 12}])
+    client = StubClient(
+        QuestionRoute=_route(route="sql"),
+        SqlQuery=_sql_query(),
+        SqlNarration=_narration(),
+    )
+
+    ask(db, "kaç ihbar var", question_id="q1", client=client, sql_db=sql_db)
+
+    assert sessions == [sql_db]
+    # The audit row is a write: it stays on the caller's session, which is the
+    # one still allowed to write.
+    assert len(db.added) == 1
+    assert db.commits == 1
+    assert sql_db.added == []
+    assert sql_db.commits == 0
+
+
+def test_a_failed_query_rolls_back_the_session_it_ran_on(db, monkeypatch):
+    sql_db = FakeSession()
+
+    def failing_run_query(_db, _sql):
+        raise OperationalError("SELECT 1", {}, Exception("permission denied for table claims"))
+
+    monkeypatch.setattr(ask_module, "run_query", failing_run_query)
+    client = StubClient(QuestionRoute=_route(route="sql"), SqlQuery=_sql_query())
+
+    result = ask(db, "kaç ihbar var", question_id="q1", client=client, sql_db=sql_db)
+
+    assert result.refusal_reason == EXECUTION_FAILED_REFUSAL
+    assert sql_db.rollbacks == 1
+    # The api's session was never poisoned, so it was never rolled back - and
+    # the audit row still got written.
+    assert db.rollbacks == 0
+    assert db.commits == 1
+
+
+def test_the_retrieval_path_ignores_sql_db(db, monkeypatch):
+    """Only generated SQL moves. The vector search reads tables the read-only
+    role cannot see, so it must stay on the caller's session."""
+    sql_db = FakeSession()
+    searched: list = []
+
+    def fake_search(search_db, _question, **_kwargs):
+        searched.append(search_db)
+        return [_source()]
+
+    monkeypatch.setattr(ask_module, "search", fake_search)
+    client = StubClient(QuestionRoute=_route(), RagAnswer=_rag_answer())
+
+    ask(db, "park halinde ne oluyor", question_id="q1", client=client, sql_db=sql_db)
+
+    assert searched == [db]
+    assert sql_db.added == []
+    assert sql_db.rollbacks == 0
+
+
 # --- the audit row -------------------------------------------------------
 
 

@@ -22,6 +22,7 @@ from sqlalchemy.orm import Session
 from api.database import get_db
 from api.dependencies import get_current_user
 from api.models.db import User
+from rag.readonly import get_readonly_db
 from worker.embedding.store import get_encoder
 from worker.rag.ask import QuestionAnswer, ask
 
@@ -76,6 +77,7 @@ def health():
 def soru(
     request: QuestionRequest,
     db: Session = Depends(get_db),
+    sql_db: Session = Depends(get_readonly_db),
     user: User = Depends(get_current_user),
 ) -> QuestionAnswer:
     """Answer a Turkish question about the claims.
@@ -88,9 +90,14 @@ def soru(
     read path into claim data, and it must not repeat /ingest's deliberate
     exemption by accident. Any logged-in role may ask; asking is a read, and
     /claims and /queue are gated the same way.
+
+    Two sessions, deliberately. `db` is the api's own connection and does what it
+    always did: authenticate, run the vector search, write the audit row.
+    `sql_db` connects as rag_readonly and is used for exactly one thing -
+    executing the SQL the model wrote (rag/readonly.py).
     """
     try:
-        return ask(db, request.question)
+        return ask(db, request.question, sql_db=sql_db)
     except Exception:
         log.exception("rag_question_failed", user=user.email)
         raise HTTPException(

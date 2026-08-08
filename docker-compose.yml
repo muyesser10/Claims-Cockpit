@@ -5,9 +5,16 @@ services:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
+      # Read by the init script below. Empty means "skip the role", which the
+      # script says out loud rather than failing.
+      RAG_READONLY_DB_PASSWORD: ${RAG_READONLY_DB_PASSWORD:-}
     ports: ["5432:5432"]
     volumes:
       - db_data:/var/lib/postgresql/data
+      # rag_readonly, the role the Text-to-SQL path runs queries as. The
+      # postgres entrypoint runs this ONLY on an empty data volume; an existing
+      # one needs the manual command in docs/runbook.md.
+      - ./migrations/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
       interval: 5s
@@ -111,6 +118,7 @@ services:
     depends_on:
       - api
       - worker
+      - rag
 
   grafana:
     image: grafana/grafana:latest
