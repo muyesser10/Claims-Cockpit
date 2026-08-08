@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from prometheus_fastapi_instrumentator import Instrumentator
 
 from api.database import SessionLocal
+from api.demo import is_demo_offline
 from api.metrics import refresh_queue_metrics
 from api.routers import auth, claims, ingest, question, queue, stats
 
@@ -80,5 +81,11 @@ Instrumentator().instrument(app).expose(app)
 def health():
     """Liveness check, deliberately unauthenticated (load balancers, docker
     healthcheck, etc. cannot carry a user JWT). DB + Redis checks will be
-    added in later sprints."""
-    return {"status": "ok", "service": "api"}
+    added in later sprints.
+
+    `demo_offline` is here rather than behind auth because that is where the
+    cockpit can read it before anyone logs in, and because "are these answers
+    recorded or live" is a question a demo audience is entitled to have
+    answered without taking anyone's word for it (S4-6).
+    """
+    return {"status": "ok", "service": "api", "demo_offline": is_demo_offline()}
