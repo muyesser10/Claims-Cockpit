@@ -1,7 +1,8 @@
 # worker/validation/test_validator.py
 """Tests for the deterministic post-extraction validator."""
 
-from worker.validation.validator import _normalize_tr, validate
+from worker.shared.injury_terms import find_injury_signals
+from worker.validation.validator import validate
 
 CLEAN_EXTRACTION = {
     "policy_no": "POL-2025-12345",
@@ -157,19 +158,59 @@ def test_mixed_case_injury_keyword_flags():
     assert any(f["rule"] == "injury_keyword_mismatch" for f in flags_random)
 
 
-# --- _normalize_tr -----------------------------------------------------------
+def test_a_term_buried_inside_another_word_does_not_flag():
+    """The bug this rule had until 2026-08-08.
+
+    A bare substring scan reads ölüm out of "bölümünde" and kan out of "çıkan",
+    and calls a scratched bumper a fatality. Over the pinned 100-record sample
+    that fired on 48 records against a ground truth of 10 injuries.
+    """
+    for text in (
+        "Aracın ön bölümünde hasar var.",
+        "Yoldan çıkan araç bariyere sürttü.",
+    ):
+        flags = validate(_with(injury=False), text)
+        assert not any(f["rule"] == "injury_keyword_mismatch" for f in flags), text
 
 
-def test_normalize_tr_uppercase_dotless_i():
-    assert _normalize_tr("YARALI") == "yaralı"
+def test_a_word_that_merely_starts_with_a_term_still_flags_known_gap():
+    """Records a gap this change does NOT close, so it is not mistaken for
+    solved.
+
+    find_injury_signals requires a term to start a word but not to end one, so
+    "kan" matches "kanal", "kanat" and "kanaat". Closing it means touching
+    worker/shared/injury_terms.py, which masking and the classifier's override
+    also read, so it needs its own false-positive measurement first.
+
+    When this test fails, the gap has been closed - delete it rather than
+    restoring the behaviour.
+    """
+    flags = validate(_with(injury=False), "Kanal kenarında park halindeydi.")
+
+    assert any(f["rule"] == "injury_keyword_mismatch" for f in flags)
 
 
-def test_normalize_tr_uppercase_dotted_i():
-    assert _normalize_tr("İSTANBUL") == "istanbul"
+def test_a_negated_injury_does_not_flag():
+    """ "kimse yaralanmadı" is the corpus's most common way of saying there was
+    no injury, and it contains the term for one."""
+    flags = validate(_with(injury=False), "Kazada kimse yaralanmadı, hasar maddi.")
+
+    assert not any(f["rule"] == "injury_keyword_mismatch" for f in flags)
 
 
-def test_normalize_tr_matches_injury_term():
-    assert "yaralı" in _normalize_tr("ARACTA YARALI VAR")
+def test_the_rule_uses_the_same_matcher_as_the_classifier():
+    """Sharing the word list is what let the two drift apart; sharing the
+    function is what stops it. If find_injury_signals says there is a signal,
+    this rule has to agree."""
+    text = "Kazada bir kişi yaralandı, ambulans çağırdık."
+
+    assert find_injury_signals(text)
+    assert any(f["rule"] == "injury_keyword_mismatch" for f in validate(_with(injury=False), text))
+
+
+# The _normalize_tr tests that used to sit here have gone. They imported the
+# name through this module's re-export and are already written, word for word,
+# in worker/shared/test_injury_terms.py - where the function actually lives.
 
 
 # --- Rule 9: injury requires critical urgency ------------------------------
