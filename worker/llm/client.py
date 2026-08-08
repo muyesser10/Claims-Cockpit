@@ -11,10 +11,12 @@ model, one place that writes the audit trail (CLAUDE.md §1: input, model,
 output and duration are recorded for every pipeline step).
 """
 
+import json
 import os
 import time
 from dataclasses import dataclass
 from enum import StrEnum
+from pathlib import Path
 from typing import TypeVar
 
 import instructor
@@ -105,6 +107,176 @@ def _build_client(settings: LlmSettings):
     )
 
 
+# --- Offline demo (S4-6) ----------------------------------------------------
+#
+# DEMO_OFFLINE swaps the bottom layer of this module - the OpenAI call itself -
+# for answers recorded under demo/fixtures/. Everything above it stays real:
+# instructor still validates the schema, structured() still times the call and
+# still writes the llm_call audit line. A demo with no network therefore
+# exercises the same code path as a live one.
+
+_ENV_TRUE_VALUES = frozenset({"true", "1", "yes"})
+
+# One JSONL per response model. Deliberately not eval/fixtures/, which is
+# measurement input - see demo/fixtures/README.md.
+FIXTURE_DIR = Path(__file__).resolve().parents[2] / "demo" / "fixtures"
+FIXTURE_GLOB = "demo_*.jsonl"
+
+# The record that answers for any message with no recorded one of its own.
+WILDCARD_GT_ID = "*"
+
+# What offline reports as its model. Deliberately not gpt-4o-mini/gpt-4o: this
+# string reaches ExtractionResult.model and from there audit_trail, and a
+# recorded answer must never read back as a live model call.
+OFFLINE_API_KEY = "offline"
+OFFLINE_CHEAP_MODEL = "offline-fixture-cheap"
+OFFLINE_STRONG_MODEL = "offline-fixture-strong"
+
+# response model name -> gt_id -> payload
+FixtureIndex = dict[str, dict[str, dict]]
+
+_fixture_cache: dict[Path, FixtureIndex] = {}
+
+
+class FixtureLoadError(RuntimeError):
+    """The fixture set is missing, malformed or incomplete.
+
+    Raised while loading rather than while answering: a broken fixture set is
+    the problem of whoever prepares the demo, and it has to surface then - not
+    halfway through a pipeline run in front of an audience.
+    """
+
+
+def is_demo_offline() -> bool:
+    """Whether the offline demo mode is on. DEMO_OFFLINE, default off."""
+    return os.environ.get("DEMO_OFFLINE", "false").strip().lower() in _ENV_TRUE_VALUES
+
+
+def _read_fixture_file(path: Path, index: FixtureIndex) -> None:
+    """Fold one JSONL file into `index`, naming file and line on any problem."""
+    for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+        if not line.strip():
+            continue
+        where = f"{path.name}:{number}"
+
+        try:
+            record = json.loads(line)
+        except json.JSONDecodeError as exc:
+            raise FixtureLoadError(f"{where}: not valid JSON ({exc})") from exc
+
+        if not isinstance(record, dict):
+            raise FixtureLoadError(f"{where}: expected a JSON object, got {type(record).__name__}")
+
+        missing = [key for key in ("gt_id", "response_model", "payload") if key not in record]
+        if missing:
+            raise FixtureLoadError(f"{where}: missing required key(s): {', '.join(missing)}")
+
+        payload = record["payload"]
+        if not isinstance(payload, dict):
+            raise FixtureLoadError(f"{where}: 'payload' must be an object")
+
+        by_gt_id = index.setdefault(str(record["response_model"]), {})
+        gt_id = str(record["gt_id"])
+        if gt_id in by_gt_id:
+            raise FixtureLoadError(
+                f"{where}: duplicate record for {record['response_model']} / {gt_id}"
+            )
+        by_gt_id[gt_id] = payload
+
+
+def _load_fixtures(directory: Path) -> FixtureIndex:
+    """Read every demo_*.jsonl in `directory` and check the set is usable."""
+    if not directory.is_dir():
+        raise FixtureLoadError(
+            f"offline fixture directory not found: {directory}. "
+            "Run demo/fixtures/build_extraction_fixtures.py and build_sanity_fixtures.py."
+        )
+
+    files = sorted(directory.glob(FIXTURE_GLOB))
+    if not files:
+        raise FixtureLoadError(f"no {FIXTURE_GLOB} files in {directory}; nothing to answer with.")
+
+    index: FixtureIndex = {}
+    for path in files:
+        _read_fixture_file(path, index)
+
+    # Every model needs a wildcard, which is what makes a lookup miss safe: a
+    # question typed live at the demo has no gt_id, and falling back must never
+    # be the thing that raises.
+    without_wildcard = sorted(
+        name for name, by_gt_id in index.items() if WILDCARD_GT_ID not in by_gt_id
+    )
+    if without_wildcard:
+        raise FixtureLoadError(
+            f"every response model needs a '{WILDCARD_GT_ID}' record; missing for: "
+            f"{', '.join(without_wildcard)}"
+        )
+
+    return index
+
+
+def load_fixtures(directory: Path | None = None) -> FixtureIndex:
+    """Return the fixture index, reading it from disk on first use.
+
+    Lazy on purpose: importing this module must not depend on the fixture set
+    existing, or every test and every online run would pay for a demo feature.
+    """
+    directory = (directory or FIXTURE_DIR).resolve()
+    cached = _fixture_cache.get(directory)
+    if cached is None:
+        cached = _load_fixtures(directory)
+        _fixture_cache[directory] = cached
+    return cached
+
+
+class _FixtureChat:
+    """Mirrors `openai_client.chat`, so LlmClient's call path is untouched."""
+
+    def __init__(self, completions: "FixtureCompletions") -> None:
+        self.completions = completions
+
+
+class FixtureCompletions:
+    """Answers from recorded fixtures instead of OpenAI.
+
+    Injected as `LlmClient(client=...)`, which is the same seam the tests use.
+    Matched on `external_ref` - the gt_id replay writes onto every message
+    (replay/replay.py) - and falling back to the wildcard for anything else.
+    """
+
+    def __init__(self, external_ref: str | None = None, *, directory: Path | None = None) -> None:
+        self.external_ref = external_ref
+        self.directory = directory
+
+    @property
+    def chat(self) -> _FixtureChat:
+        return _FixtureChat(self)
+
+    def create_with_completion(self, **request):
+        """Return (parsed_model, completion) the way instructor would.
+
+        A missing gt_id is normal and falls back silently. A response model with
+        no fixtures at all is not: nothing can answer for it, so it raises with
+        the model's name rather than inventing something.
+        """
+        response_model = request["response_model"]
+        name = response_model.__name__
+
+        by_gt_id = load_fixtures(self.directory).get(name)
+        if by_gt_id is None:
+            raise FixtureLoadError(
+                f"no offline fixtures recorded for {name}; "
+                f"add records for it under {self.directory or FIXTURE_DIR}"
+            )
+
+        payload = by_gt_id.get(self.external_ref or WILDCARD_GT_ID, by_gt_id[WILDCARD_GT_ID])
+
+        # completion=None deliberately: structured() reads usage and
+        # system_fingerprint with getattr(..., None), and inventing token counts
+        # for an answer that cost nothing would put fiction in the audit trail.
+        return response_model(**payload), None
+
+
 class LlmClient:
     """Asks the model to fill in a Pydantic schema, and records what happened.
 
@@ -190,3 +362,26 @@ class LlmClient:
             system_fingerprint=getattr(completion, "system_fingerprint", None),
         )
         return result
+
+
+def get_llm_client(external_ref: str | None = None) -> LlmClient:
+    """The client every caller should build.
+
+    Online this is exactly `LlmClient()`. Offline (DEMO_OFFLINE) it is the same
+    LlmClient with its bottom layer swapped for recorded answers, matched on
+    `external_ref` and falling back to the wildcard record.
+
+    A factory rather than a branch inside `LlmClient.__init__`, deliberately:
+    eval builds `LlmClient()` directly, and a constructor that could quietly
+    hand back fixtures would let a scoring run grade the answers it was handed.
+    Anything that must never see a fixture keeps calling the constructor.
+    """
+    if not is_demo_offline():
+        return LlmClient()
+
+    settings = LlmSettings(
+        api_key=OFFLINE_API_KEY,
+        cheap_model=OFFLINE_CHEAP_MODEL,
+        strong_model=OFFLINE_STRONG_MODEL,
+    )
+    return LlmClient(settings=settings, client=FixtureCompletions(external_ref))
