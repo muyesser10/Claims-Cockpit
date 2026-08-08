@@ -28,6 +28,7 @@ SYSTEM_PROMPT = PROMPT_PATH.read_text(encoding="utf-8")
 
 LLM_URGENCY = "llm"
 INJURY_OVERRIDE = "injury_override"
+FALLBACK = "fallback"
 
 
 class ClassificationResult(BaseModel):
@@ -53,6 +54,38 @@ class ClassificationResult(BaseModel):
     def should_extract(self) -> bool:
         """Design doc §4's early exit: only claims go on to extraction."""
         return self.content_type is ContentType.CLAIM
+
+
+def fallback_classification(text: str) -> ClassificationResult:
+    """The verdict when the model cannot be reached: injury terms and nothing else.
+
+    Lives here rather than in the pipeline so both paths agree on what counts as
+    an injury - `find_injury_signals` is the same function classify() uses, and a
+    second copy of that rule would drift from this one silently.
+
+    Two defaults worth stating. Urgency falls to normal without a signal, so the
+    high tier is simply unavailable while the model is down; that is a loss of
+    resolution, not of safety. Content type falls to `claim`, because treating an
+    info_request as a claim costs one wasted extraction while the reverse drops a
+    real claim out of the queue - and CLAUDE.md §7 puts critical recall at >= 97%
+    for exactly that asymmetry.
+    """
+    signals = find_injury_signals(text)
+    urgency = Urgency.CRITICAL if signals else Urgency.NORMAL
+
+    return ClassificationResult(
+        content_type=ContentType.CLAIM,
+        urgency=urgency,
+        # No model answered, so there is no model answer to compare against. The
+        # two are equal rather than one being null, which keeps every consumer of
+        # this field reading a real urgency.
+        llm_urgency=urgency,
+        urgency_source=INJURY_OVERRIDE if signals else FALLBACK,
+        injury_signals=signals,
+        reasoning="classification call failed; injury terms only",
+        model="none",
+        duration_ms=0,
+    )
 
 
 def build_user_content(text: str, channel: str) -> str:

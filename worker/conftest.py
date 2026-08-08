@@ -12,6 +12,7 @@ from sqlalchemy import BigInteger
 from sqlalchemy.ext.compiler import compiles
 
 import worker.pipeline as pipeline_module
+from worker.classification.classifier import fallback_classification
 from worker.embedding.encoder import EMBEDDING_DIMENSIONS
 
 
@@ -45,3 +46,27 @@ def _no_real_encoder(monkeypatch):
         )
 
     monkeypatch.setattr(pipeline_module, "store_embedding", _fake_store_embedding)
+
+
+@pytest.fixture(autouse=True)
+def _no_real_classifier(monkeypatch):
+    """Keep the real classification call out of every worker test.
+
+    process_message runs step_classify, which calls OpenAI. Left alone, any test
+    that drives the pipeline would spend money locally and fail in CI, where
+    there is no key - inside a step whose output does not say why.
+
+    The stand-in is the classifier's own fallback: real injury terms, no model.
+    A stub that always answered `normal` would let an injury-override regression
+    through every pipeline test in the suite.
+
+    Autouse for the same reason as _no_real_encoder: the cost of forgetting is
+    paid by whoever writes the next pipeline test, and they have no reason to
+    know this trap exists. A test that wants a specific verdict monkeypatches
+    pipeline_module.classify itself; that overrides this.
+    """
+
+    def _fake_classify(text, channel, **kwargs):
+        return fallback_classification(text)
+
+    monkeypatch.setattr(pipeline_module, "classify", _fake_classify)
