@@ -8,6 +8,7 @@ same arrangement as worker/llm/test_client.py.
 
 import pytest
 
+import worker.classification.classifier as classifier_module
 from worker.classification.classifier import (
     INJURY_OVERRIDE,
     LLM_URGENCY,
@@ -172,3 +173,40 @@ def test_user_content_carries_the_channel():
     content = build_user_content("aracım çizildi", "web_form")
     assert "Kanal: web_form" in content
     assert "aracım çizildi" in content
+
+
+def test_external_ref_reaches_the_client_factory(monkeypatch):
+    """Offline (DEMO_OFFLINE) the factory picks the recorded verdict by gt_id.
+
+    classify() never reads external_ref itself; dropping it would silently give
+    every record the neutral wildcard verdict instead of its own.
+    """
+    seen: dict = {}
+    client, _ = make_client(answer())
+
+    def fake_factory(*, external_ref=None):
+        seen["external_ref"] = external_ref
+        return client
+
+    monkeypatch.setattr(classifier_module, "get_llm_client", fake_factory)
+
+    classify("metin", "email", message_id="m1", external_ref="GT-000007")
+
+    assert seen["external_ref"] == "GT-000007"
+
+
+def test_the_injury_override_still_runs_over_a_recorded_verdict(monkeypatch):
+    """The deterministic rule is not bypassed offline.
+
+    A recorded verdict that says `normal` over a text that mentions an ambulance
+    must still come out critical - the rule CLAUDE.md §7's >= 97% critical
+    recall rests on does not care where the verdict came from.
+    """
+    client, _ = make_client(answer(urgency="normal", injury=False))
+    monkeypatch.setattr(classifier_module, "get_llm_client", lambda **_: client)
+
+    result = classify("Kaza oldu, ambulans geldi", "email", message_id="m1", external_ref="GT-1")
+
+    assert result.urgency is Urgency.CRITICAL
+    assert result.urgency_source == INJURY_OVERRIDE
+    assert result.llm_urgency is Urgency.NORMAL

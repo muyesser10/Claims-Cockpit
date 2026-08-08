@@ -25,10 +25,12 @@ from worker.classification.classifier import (
     LLM_URGENCY,
     ClassificationResult,
 )
+from worker.classification.classifier import classify as real_classify
 from worker.classification.schema import ContentType, Urgency
 from worker.embedding.encoder import EMBEDDING_DIMENSIONS
 from worker.embedding.store import store_embedding as real_store_embedding
 from worker.extraction.extractor import ExtractionResult
+from worker.llm.client import OFFLINE_CHEAP_MODEL
 from worker.masking.sanity import SanityCheckResult, SanityFlag
 
 engine = create_engine(
@@ -674,3 +676,114 @@ def test_fallback_source_is_named_when_nothing_fired(db, monkeypatch):
     pipeline_module.process_message(db, msg.id)
 
     assert _audit(db, "classification", msg.id).detail["urgency_source"] == FALLBACK
+
+
+# --- DEMO_OFFLINE end to end (S4-6) ------------------------------------------
+#
+# These drive the real check_sanity, classify and extract - only the OpenAI
+# layer underneath them is replaced, by the recorded answers in demo/fixtures/.
+# What is under test is the wiring: that a replayed message reaches its own
+# recorded answer, and that a hand-typed one falls back to the wildcard.
+
+
+def _make_replayed_message(db_session, external_ref: str | None, text: str) -> RawMessage:
+    """A message as replay/replay.py posts it: gt_id carried in external_ref."""
+    msg = RawMessage(
+        channel="email",
+        raw_text=text,
+        external_ref=external_ref,
+        received_at=datetime.now(UTC),
+        status="received",
+    )
+    db_session.add(msg)
+    db_session.commit()
+    db_session.refresh(msg)
+    return msg
+
+
+@pytest.fixture
+def offline(monkeypatch):
+    """DEMO_OFFLINE on, and the autouse classification stub taken back off.
+
+    worker/conftest.py replaces pipeline_module.classify for every test so the
+    suite never reaches OpenAI. Here the real one has to run - reaching the
+    fixtures is the whole point - and the recorded verdict is what keeps it off
+    the network.
+    """
+    monkeypatch.setenv("DEMO_OFFLINE", "true")
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.setattr(pipeline_module, "classify", real_classify)
+
+
+def test_offline_replayed_message_gets_its_own_recorded_answers(db, offline):
+    """GT-000007's fixtures, end to end: sanity, classification and extraction."""
+    msg = _make_replayed_message(db, "GT-000007", "Dolu yagdi, aracin her yeri gocuk oldu.")
+
+    pipeline_module.process_message(db, msg.id)
+
+    claim = db.execute(select(Claim).where(Claim.raw_message_id == msg.id)).scalar_one()
+
+    # Sanity: the recorded verdict is clean, so extraction was not skipped.
+    assert claim.data.get("masking_sanity_flags") in (None, [])
+
+    # Classification: content type and urgency come from the ground truth.
+    assert claim.content_type == ContentType.CLAIM
+    assert claim.urgency == Urgency.NORMAL
+
+    # Extraction: this record's own values, not the wildcard's nulls.
+    extraction = claim.data["extraction"]
+    assert extraction["plate"] == "52 OKL 1983"
+    assert extraction["policy_no"] == "POL-2025-50857"
+    assert extraction["damage_type"] == "hail"
+    assert extraction["incident_location"]["city"] == "Ankara"
+
+
+def test_offline_hand_typed_message_falls_back_to_the_wildcard(db, offline):
+    """No external_ref: nothing recorded, so nothing is invented either."""
+    msg = _make_replayed_message(db, None, "Aracima bir sey oldu, ne yapmaliyim.")
+
+    pipeline_module.process_message(db, msg.id)
+
+    claim = db.execute(select(Claim).where(Claim.raw_message_id == msg.id)).scalar_one()
+    extraction = claim.data["extraction"]
+
+    # The wildcard fills nothing in - a plausible plate here would be the one
+    # thing an offline demo must never do.
+    assert extraction["plate"] is None
+    assert extraction["policy_no"] is None
+    assert extraction["estimated_amount"] is None
+    assert "plate" in extraction["missing_fields"]
+
+    # And the neutral verdict still routes it to a human.
+    assert claim.content_type == ContentType.CLAIM
+    assert claim.status == "in_human_review"
+
+
+def test_offline_audit_trail_records_the_fixture_model_name(db, offline):
+    """A recorded answer must not read back as a live gpt-4o call.
+
+    step_extract writes the model name into AuditTrail.provider, not into
+    detail - that column is what a later "which model produced this" question
+    reads, and offline it has to say so.
+    """
+    msg = _make_replayed_message(db, "GT-000007", "Dolu yagdi, aracin her yeri gocuk oldu.")
+
+    pipeline_module.process_message(db, msg.id)
+
+    extraction_audit = _audit(db, "extraction", msg.id)
+    assert extraction_audit.provider == OFFLINE_CHEAP_MODEL
+    assert "gpt" not in extraction_audit.provider
+
+
+def test_offline_injury_override_still_fires_over_a_recorded_verdict(db, offline):
+    """GT-000007 is recorded as normal; an injury in the text still wins.
+
+    The deterministic rule is the backbone of CLAUDE.md §7's critical recall,
+    and an offline demo that quietly lost it would be worse than no demo.
+    """
+    msg = _make_replayed_message(db, "GT-000007", "Kaza oldu, yarali var, ambulans geldi.")
+
+    pipeline_module.process_message(db, msg.id)
+
+    claim = db.execute(select(Claim).where(Claim.raw_message_id == msg.id)).scalar_one()
+    assert claim.urgency == Urgency.CRITICAL

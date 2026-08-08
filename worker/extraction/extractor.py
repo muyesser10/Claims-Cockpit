@@ -20,7 +20,7 @@ from typing import Any
 from pydantic import BaseModel
 
 from worker.extraction.schema import ClaimExtraction
-from worker.llm.client import LlmClient, ModelTier
+from worker.llm.client import LlmClient, ModelTier, get_llm_client
 
 PROMPT_PATH = Path(__file__).resolve().parents[2] / "prompts" / "extraction_v1.txt"
 
@@ -149,12 +149,19 @@ def extract(
     channel: str,
     *,
     message_id: str,
+    external_ref: str | None = None,
     client: LlmClient | None = None,
     seed: int | None = None,
     tier: ModelTier = ModelTier.CHEAP,
     system_prompt: str | None = None,
 ) -> ExtractionResult:
     """Run one extraction over `text`, which the pipeline has already masked.
+
+    `external_ref` is the gt_id replay wrote onto the message, and it is only
+    read offline (DEMO_OFFLINE), where it picks the recorded answer for this
+    record. `message_id` stays what it was - this database's row id, the thing
+    every llm_call log line ties back to - because the two answer different
+    questions and neither substitutes for the other.
 
     `seed` is for eval runs, where week-to-week comparability matters more than
     anything else; the live pipeline leaves it unset.
@@ -167,7 +174,7 @@ def extract(
     `system_prompt` defaults to the versioned file. Overriding it lets eval
     compare prompt variants on one sample; the pipeline never passes it.
     """
-    client = client or LlmClient()
+    client = client or get_llm_client(external_ref=external_ref)
     started = time.perf_counter()
 
     answer = client.structured(

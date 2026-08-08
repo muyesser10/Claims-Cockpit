@@ -22,7 +22,7 @@ from sqlalchemy.orm import Session
 
 from api.models.db import AuditTrail
 from worker.embedding.encoder import Encoder
-from worker.llm.client import LlmClient
+from worker.llm.client import LlmClient, get_llm_client
 from worker.rag.answer import answer_question
 from worker.rag.retrieval import RetrievedClaim, search
 from worker.rag.router import Route, RouteResult, route_question
@@ -39,6 +39,21 @@ AUDIT_STEP = "rag_question"
 CANNOT_ANSWER_REFUSAL = "Bu soru mevcut verilerle cevaplanamıyor."
 GENERATION_FAILED_REFUSAL = "Soru için güvenli bir sorgu üretilemedi."
 EXECUTION_FAILED_REFUSAL = "Sorgu çalıştırılamadı; bu soru şu an cevaplanamıyor."
+
+
+def normalize_question(question: str) -> str:
+    """The key a question is matched by offline (DEMO_OFFLINE).
+
+    strip + lower, and nothing more. A demo question is typed live, so a
+    capital or a trailing space must not cost the recorded answer. Anything
+    cleverer - stripping punctuation, fuzzy matching - would trade a miss,
+    which falls back to a polite refusal, for a mismatch, which answers a
+    different question convincingly. On stage the second is far worse.
+
+    Online this value is computed and then ignored: get_llm_client() only reads
+    it when DEMO_OFFLINE is on.
+    """
+    return question.strip().lower()
 
 
 class QuestionAnswer(BaseModel):
@@ -98,7 +113,10 @@ def ask(
     in the operator's error centre as a thousand audit rows.
     """
     question_id = question_id or uuid.uuid4().hex
-    client = client or LlmClient()
+    # One client for the whole question, so all four steps read the same
+    # recorded set offline. The key is the question itself: question_id is a
+    # fresh uuid per request and there is no gt_id on this path.
+    client = client or get_llm_client(external_ref=normalize_question(question))
     started = time.perf_counter()
 
     route = route_question(question, question_id=question_id, client=client, seed=seed)

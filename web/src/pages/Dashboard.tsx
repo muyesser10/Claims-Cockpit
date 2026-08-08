@@ -7,6 +7,7 @@ import CityBar from "../components/CityBar";
 import TrendChart from "../components/TrendChart";
 import Pulse from "../components/Pulse";
 import ErrorScreen from "../components/ErrorScreen";
+import OfflineBadge from "../components/OfflineBadge";
 
 export default function Dashboard() {
   // İki bağımsız sorgu: biri patlarken diğeri veri göstermeye devam ediyor,
@@ -24,6 +25,9 @@ export default function Dashboard() {
   return (
     <div>
       <h1 className="text-xl font-semibold mb-4">Pano</h1>
+
+      {/* Çevrimdışı demoda görünür, aksi halde hiçbir şey çizmez. */}
+      <OfflineBadge />
 
       {statsLoading && <p className="text-slate-500">İstatistikler yükleniyor...</p>}
       {statsIsError && (

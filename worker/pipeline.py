@@ -106,7 +106,7 @@ def step_mask_sanity(db: Session, msg: RawMessage, masked_text: str) -> SanityCh
     started = time.perf_counter()
 
     if enabled:
-        result = check_sanity(masked_text, message_id=str(msg.id))
+        result = check_sanity(masked_text, message_id=str(msg.id), external_ref=msg.external_ref)
     else:
         result = SanityCheckResult(leak_found=False)
 
@@ -146,7 +146,12 @@ def step_classify(db: Session, msg: RawMessage, masked_text: str) -> Classificat
     a claim to the dead letter queue over a failure of its own.
     """
     try:
-        result = classify(masked_text, msg.channel, message_id=str(msg.id))
+        result = classify(
+            masked_text,
+            msg.channel,
+            message_id=str(msg.id),
+            external_ref=msg.external_ref,
+        )
     except Exception as e:
         logger.error(f"raw_message_id={msg.id} classification failed: {e}", exc_info=True)
         result = fallback_classification(masked_text)
@@ -250,6 +255,7 @@ def step_extract(db: Session, msg: RawMessage, claim: Claim, masked_text: str) -
             received_at=msg.received_at,
             channel=msg.channel,
             message_id=str(msg.id),
+            external_ref=msg.external_ref,
         )
 
         mappings = db.query(MaskMapping).filter(MaskMapping.raw_message_id == msg.id).all()

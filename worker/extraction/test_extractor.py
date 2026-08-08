@@ -3,6 +3,7 @@
 
 from datetime import datetime
 
+import worker.extraction.extractor as extractor_module
 from worker.extraction.extractor import (
     SYSTEM_PROMPT,
     ExtractionResult,
@@ -163,3 +164,37 @@ def test_tier_can_be_overridden_for_eval():
     )
     assert client.calls[0]["tier"] is ModelTier.STRONG
     assert result.model == "gpt-4o"
+
+
+def test_external_ref_reaches_the_client_factory(monkeypatch):
+    """Offline (DEMO_OFFLINE) the factory picks the recorded answer by gt_id.
+
+    extract() never reads external_ref itself; dropping it would still produce
+    an extraction, just always the wildcard one, on every record.
+    """
+    seen: dict = {}
+
+    def fake_factory(*, external_ref=None):
+        seen["external_ref"] = external_ref
+        return StubClient(ClaimExtraction(reasoning="x"))
+
+    monkeypatch.setattr(extractor_module, "get_llm_client", fake_factory)
+
+    extract(TEXT, datetime(2026, 7, 25), "email", message_id="1", external_ref="GT-000007")
+
+    assert seen["external_ref"] == "GT-000007"
+
+
+def test_without_an_external_ref_the_factory_gets_none(monkeypatch):
+    """A message posted straight to /ingest has no gt_id."""
+    seen: dict = {}
+
+    def fake_factory(*, external_ref=None):
+        seen["external_ref"] = external_ref
+        return StubClient(ClaimExtraction(reasoning="x"))
+
+    monkeypatch.setattr(extractor_module, "get_llm_client", fake_factory)
+
+    extract(TEXT, datetime(2026, 7, 25), "email", message_id="1")
+
+    assert seen["external_ref"] is None

@@ -18,7 +18,7 @@ from pathlib import Path
 from pydantic import BaseModel
 
 from worker.classification.schema import ClaimClassification, ContentType, Urgency
-from worker.llm.client import LlmClient, ModelTier
+from worker.llm.client import LlmClient, ModelTier, get_llm_client
 from worker.shared.injury_terms import find_injury_signals
 
 PROMPT_PATH = Path(__file__).resolve().parents[2] / "prompts" / "classification_v1.txt"
@@ -98,6 +98,7 @@ def classify(
     channel: str,
     *,
     message_id: str,
+    external_ref: str | None = None,
     client: LlmClient | None = None,
     seed: int | None = None,
     tier: ModelTier = ModelTier.CHEAP,
@@ -108,13 +109,18 @@ def classify(
     `text` is the masked text: the pipeline masks before it classifies, and the
     prompt tells the model to ignore the placeholders.
 
+    `external_ref` is the gt_id replay wrote onto the message; offline
+    (DEMO_OFFLINE) it selects the recorded verdict for this record, online
+    nothing reads it. The injury override below runs either way - it is
+    deterministic and never depended on the model being reachable.
+
     `seed` is for eval runs, where week-to-week comparability matters more than
     anything else; the live pipeline leaves it unset.
 
     `system_prompt` defaults to the versioned file. Overriding it lets eval
     compare prompt variants on one sample; the pipeline never passes it.
     """
-    client = client or LlmClient()
+    client = client or get_llm_client(external_ref=external_ref)
     started = time.perf_counter()
 
     answer = client.structured(

@@ -37,7 +37,7 @@ class RaisingClient:
 
 
 class RaisingLlmClientClass:
-    """Stands in for the LlmClient *class*: raises on construction, like
+    """Stands in for the client factory: raises when called, the way
     load_settings() does when OPENAI_API_KEY is unset."""
 
     def __init__(self, *args, **kwargs) -> None:
@@ -131,11 +131,17 @@ def test_check_sanity_fail_closed_flags_are_never_empty():
 
 
 def test_check_sanity_fails_closed_when_client_construction_raises(monkeypatch):
-    """LlmClient() itself can raise (e.g. OPENAI_API_KEY missing) before any
+    """Building the client can raise (e.g. OPENAI_API_KEY missing) before any
     LLM call happens. That must be caught too, not escape check_sanity() and
     crash the whole pipeline step (which used to send the message straight
-    to dead_letter instead of routing it to human review)."""
-    monkeypatch.setattr(sanity_module, "LlmClient", RaisingLlmClientClass)
+    to dead_letter instead of routing it to human review).
+
+    Patches get_llm_client, which is what check_sanity calls since S4-6. With
+    the old `LlmClient` patch the stand-in was simply never reached: on a
+    machine with a key in the environment the test built a real client and this
+    assertion turned into a live OpenAI request.
+    """
+    monkeypatch.setattr(sanity_module, "get_llm_client", RaisingLlmClientClass)
 
     result = check_sanity("...", message_id="1", client=None)
 
@@ -178,3 +184,38 @@ def test_flagged_pii_text_never_appears_in_result():
     )
     dumped = result.model_dump_json()
     assert leaked_name not in dumped
+
+
+def test_external_ref_reaches_the_client_factory(monkeypatch):
+    """Offline (DEMO_OFFLINE) the factory picks the recorded verdict by gt_id.
+
+    check_sanity does not read external_ref itself - it only has to hand it on,
+    which is exactly the wiring that would break silently: a dropped argument
+    would still answer, just always from the wildcard record.
+    """
+    seen: dict = {}
+
+    def fake_factory(*, external_ref=None):
+        seen["external_ref"] = external_ref
+        return StubClient(SanityCheckResult(leak_found=False))
+
+    monkeypatch.setattr(sanity_module, "get_llm_client", fake_factory)
+
+    check_sanity("bir metin", message_id="1", external_ref="GT-000007")
+
+    assert seen["external_ref"] == "GT-000007"
+
+
+def test_without_an_external_ref_the_factory_gets_none(monkeypatch):
+    """A message posted straight to /ingest has no gt_id."""
+    seen: dict = {}
+
+    def fake_factory(*, external_ref=None):
+        seen["external_ref"] = external_ref
+        return StubClient(SanityCheckResult(leak_found=False))
+
+    monkeypatch.setattr(sanity_module, "get_llm_client", fake_factory)
+
+    check_sanity("bir metin", message_id="1")
+
+    assert seen["external_ref"] is None

@@ -129,6 +129,81 @@ docker compose exec api alembic upgrade head
 docker compose exec db psql -U claims -d claims_cockpit
 ```
 
+## Demo hazırlığı (S4-6)
+
+Çevrimdışı demo (`DEMO_OFFLINE=true`), LLM cevaplarını `demo/fixtures/`
+altındaki kayıtlı setten okur. Maskeleme, embedding, SQL guard, gerçek sorgu
+çalıştırma, sayı ve atıf doğrulaması **gerçek** çalışmaya devam eder — sahte
+olan yalnızca en alttaki OpenAI çağrısıdır.
+
+### Ne zaman çalıştırılır
+
+Demodan önce, **temiz bir veritabanı üzerinde** bir kez. Veritabanı zaten
+doluysa önce sıfırlayın (`docker compose down -v` + `up -d` + `alembic upgrade
+head`), yoksa sayımlar birikir ve `/soru`'nun SQL cevapları tutmaz.
+
+### Adımlar
+
+```bash
+# .env'de DEMO_OFFLINE=true olmalı; worker bu değişkeni okuyarak başlar
+docker compose up -d --build
+docker compose exec api alembic upgrade head
+
+# Script HOST'ta çalışır (container içinde değil): .dockerignore data/*.jsonl'ı
+# image'lara koymuyor, script de tam o dosyaları okuyor. Host'un Python ortamı
+# (requirements.txt) ve yayınlanmış portlar gerekiyor.
+DEMO_OFFLINE=true \
+DATABASE_URL=postgresql://claims:<parola>@localhost:5432/claims_cockpit \
+python -m demo.seed_demo_db
+```
+
+`.env`'deki `DATABASE_URL` `db:5432`'yi gösterir ve yalnızca compose ağının
+içinden çözülür; host'tan çalıştırırken yayınlanmış portu veren bir değerle
+geçmek gerekir (yukarıdaki gibi).
+
+Script `data/texts.jsonl`'ın ilk 60 kaydını `/ingest`'e gönderir, worker
+kuyruğu boşalana kadar bekler ve sonucu doğrular:
+
+```
+=== sonuç ===
+  raw_messages.status=classified: 60
+  claims:           60
+  claim_embeddings: 60
+Demo veritabanı hazır.
+```
+
+Ölçüldü: 60 kayıt uçtan uca ~50 sn (ilk embedding çağrısında e5 modelinin
+yüklenmesi bunun yaklaşık yarısı; ilerleme `bekleniyor... 0/60` diye görünür,
+takılmış değildir).
+
+Yararlı parametreler: `--limit` (kaç kayıt), `--wait-timeout` (varsayılan 120
+sn; aşılırsa uyarı verir ama hata vermez), `--api-url` (varsayılan
+`http://localhost:8000`).
+
+### Neden tam 60 kayıt
+
+`demo/fixtures/demo_rag.jsonl`'daki `/soru` cevaplarının içindeki sayılar (5
+kritik, 9 dolu hasarı, İzmir 14 / Ankara 11 / Antalya 11 / İstanbul 10 / Bursa
+8) **bu 60 kayda karşı ölçüldü**. Çalışma anında bu sayılar doğrulanıyor
+(`worker/rag/sql_answer.py`), dolayısıyla farklı bir alt küme **yanlış cevap
+üretmez** — cevabı tamamen gizler ve operatör bir ret mesajı görür. Güvenli
+ama demonun SQL yarısını boşaltır. `--limit`'i değiştirirseniz RAG
+fixture'larını da yeniden üretin:
+
+```bash
+python demo/fixtures/build_rag_fixtures.py   # içindeki sayıları elle güncelledikten sonra
+```
+
+### DEMO_OFFLINE kapalıyken
+
+Script çalışmayı reddeder ve nedenini söyler: 60 kayıt × 3 LLM çağrısı = 180
+canlı OpenAI isteği, yani parayla ödenen bir kaza. Kontrol script'in kendi
+sürecinin ortamına bakar; asıl belirleyici olan worker'ın ayarıdır:
+
+```bash
+docker compose exec worker env | grep DEMO_OFFLINE
+```
+
 ## Backup and restore
 ## Model rotation
 ## Incident playbook
