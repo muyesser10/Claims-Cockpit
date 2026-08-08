@@ -10,8 +10,25 @@ interface LoginResponse {
   token_type: string;
 }
 
+// API tamamen kapalıyken fetch bir yanıt üretmeden TypeError ile reject eder
+// ("Failed to fetch" / "NetworkError when attempting to fetch resource" —
+// tarayıcıya göre değişen, İngilizce metinler). Durum kodu yok, dolayısıyla
+// aşağıdaki HTTP eşlemeleri hiç çalışmıyor ve o çıplak İngilizce mesaj
+// doğrudan ekranda görünüyordu.
+const NETWORK_ERROR_MESSAGE = "Sunucuya ulaşılamıyor, bağlantınızı kontrol edin.";
+
+// fetch'i sarmalar: yalnızca ağ katmanı hatasını Türkçeleştirir, HTTP yanıtına
+// (durum kodu dahil) dokunmaz — onu çağıran kendi bağlamına göre yorumluyor.
+async function fetchOrNetworkError(url: string, options?: RequestInit): Promise<Response> {
+  try {
+    return await fetch(url, options);
+  } catch {
+    throw new Error(NETWORK_ERROR_MESSAGE);
+  }
+}
+
 export async function login(email: string, password: string): Promise<void> {
-  const res = await fetch("/api/auth/login", {
+  const res = await fetchOrNetworkError("/api/auth/login", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email, password }),
@@ -49,5 +66,8 @@ export async function authenticatedFetch(url: string, options: RequestInit = {})
   const headers = new Headers(options.headers);
   headers.set("Authorization", `Bearer ${token}`);
 
-  return fetch(url, { ...options, headers });
+  // Aynı ağ hatası buradan da geçiyor: her ekranın sorgusu bu fonksiyonu
+  // kullandığı için API kapalıyken ErrorScreen "Failed to fetch" yerine
+  // Türkçe mesajı gösteriyor.
+  return fetchOrNetworkError(url, { ...options, headers });
 }

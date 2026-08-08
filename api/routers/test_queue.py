@@ -5,12 +5,18 @@ Fixtures (client, db_session, auth_headers, ...) come from api/conftest.py —
 this file no longer sets up its own engine/TestClient/dependency override.
 """
 
+import json
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
+from typing import get_args
 
 from sqlalchemy import select
 
 from api.models.db import AuditTrail, Claim, User
+from api.routers.queue import EDITABLE_FIELDS, DamageTypeName
 from api.security import create_access_token, hash_password
+
+CLAIM_SCHEMA_PATH = Path(__file__).resolve().parents[2] / "schemas" / "claim.json"
 
 
 def _make_claim(db_session, *, status="in_human_review", urgency="normal", created_at=None):
@@ -270,6 +276,196 @@ def test_approve_edit_is_actually_persisted_to_db(client, db_session, auth_heade
     db_session.expire_all()
     reloaded = db_session.execute(select(Claim).where(Claim.id == claim.id)).scalar_one()
     assert reloaded.data["extraction"]["plate"] == "34 ABC 123"
+
+
+# --- POST /queue/{id}/approve: edit value types -------------------------------
+#
+# The field-name whitelist was the only check here for a while: any value at all
+# went into claim.data as long as the key was allowed. These pin the types down.
+
+
+def _reload(db_session, claim_id: int) -> Claim:
+    """Re-read a claim through a session that did not serve the request."""
+    db_session.expire_all()
+    return db_session.execute(select(Claim).where(Claim.id == claim_id)).scalar_one()
+
+
+def test_editable_fields_covers_every_extraction_field():
+    """EDITABLE_FIELDS is derived from ClaimEdits — a typo'd alias would shrink it."""
+    assert EDITABLE_FIELDS == {
+        "policy_no",
+        "plate",
+        "incident_date",
+        "damage_type",
+        "injury",
+        "counterparty_exists",
+        "estimated_amount",
+        "damage_description",
+        "incident_location.city",
+        "incident_location.district",
+    }
+
+
+def test_damage_type_choices_match_claim_json():
+    """The api copy of the eight values stays in step with the team schema.
+
+    Mirrors worker/extraction/test_schema.py: api/ cannot import worker's enum
+    (api/Dockerfile does not copy worker/), so a [SCHEMA] PR has to go red here.
+    """
+    raw = json.loads(CLAIM_SCHEMA_PATH.read_text(encoding="utf-8"))["damage_type"]
+    expected = {value.strip() for value in raw.split("|")} - {"null"}
+    assert set(get_args(DamageTypeName)) == expected
+
+
+def test_approve_with_turkish_formatted_amount_returns_400(client, db_session, auth_headers):
+    """'1.250,50 TL' is text, not a number — the same rule extraction is held to."""
+    claim = _make_claim_with_extraction(db_session, {"estimated_amount": 1000.0})
+
+    response = client.post(
+        f"/queue/{claim.id}/approve",
+        json={"edits": {"estimated_amount": "1.250,50 TL"}},
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 400
+    assert "estimated_amount" in response.json()["detail"]
+    assert _reload(db_session, claim.id).data["extraction"]["estimated_amount"] == 1000.0
+
+
+def test_approve_with_numeric_amount_is_stored_as_a_number(client, db_session, auth_headers):
+    claim = _make_claim_with_extraction(db_session, {"estimated_amount": None})
+
+    response = client.post(
+        f"/queue/{claim.id}/approve",
+        json={"edits": {"estimated_amount": 1250.5}},
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 200
+    stored = _reload(db_session, claim.id).data["extraction"]["estimated_amount"]
+    assert stored == 1250.5
+    assert isinstance(stored, float)
+
+
+def test_approve_with_relative_date_returns_400(client, db_session, auth_headers):
+    """'yarın' is what the extraction prompt forbids; an operator may not send it either."""
+    claim = _make_claim_with_extraction(db_session, {"incident_date": "2026-07-08"})
+
+    response = client.post(
+        f"/queue/{claim.id}/approve",
+        json={"edits": {"incident_date": "yarın"}},
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 400
+    assert "incident_date" in response.json()["detail"]
+    assert _reload(db_session, claim.id).data["extraction"]["incident_date"] == "2026-07-08"
+
+
+def test_approve_with_iso_date_stores_a_string_not_a_date(client, db_session, auth_headers):
+    """Regression guard for model_dump(mode="json").
+
+    incident_date validates into a datetime.date. claim.data is a JSON column
+    holding ISO strings (that is what the pipeline writes), so a python-mode
+    dump would put a date object into the column and into the audit diff.
+    """
+    claim = _make_claim_with_extraction(db_session, {"incident_date": None})
+
+    response = client.post(
+        f"/queue/{claim.id}/approve",
+        json={"edits": {"incident_date": "2026-07-14"}},
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 200
+    stored = _reload(db_session, claim.id).data["extraction"]["incident_date"]
+    assert stored == "2026-07-14"
+    assert isinstance(stored, str)
+
+    audit = db_session.execute(
+        select(AuditTrail).where(AuditTrail.claim_id == claim.id, AuditTrail.step == "approve")
+    ).scalar_one()
+    assert audit.detail["edits"] == [
+        {"field": "incident_date", "before": None, "after": "2026-07-14"}
+    ]
+
+
+def test_approve_with_non_boolean_injury_returns_400(client, db_session, auth_headers):
+    """injury is bool | None — 'belki' is neither, and null≠false is a kept distinction."""
+    claim = _make_claim_with_extraction(db_session, {"injury": None})
+
+    response = client.post(
+        f"/queue/{claim.id}/approve",
+        json={"edits": {"injury": "belki"}},
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 400
+    assert "injury" in response.json()["detail"]
+
+
+def test_approve_with_damage_type_outside_the_enum_returns_400(client, db_session, auth_headers):
+    claim = _make_claim_with_extraction(db_session, {"damage_type": "collision"})
+
+    response = client.post(
+        f"/queue/{claim.id}/approve",
+        json={"edits": {"damage_type": "sel"}},
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 400
+    assert "damage_type" in response.json()["detail"]
+
+
+def test_approve_with_invalid_nested_edit_returns_400(client, db_session, auth_headers):
+    """The dotted alias survives into the error message, not the python name 'city'."""
+    claim = _make_claim_with_extraction(
+        db_session, {"incident_location": {"city": "Ankara", "district": None}}
+    )
+
+    response = client.post(
+        f"/queue/{claim.id}/approve",
+        json={"edits": {"incident_location.city": 42}},
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 400
+    assert "incident_location.city" in response.json()["detail"]
+
+
+def test_rejected_edit_leaves_claim_in_human_review_and_writes_nothing(
+    client, db_session, auth_headers
+):
+    """No partial write: one bad value in the batch rolls the whole approve back.
+
+    The valid plate edit sits alongside an invalid amount — validation runs over
+    the whole payload before anything is assigned, so neither lands and the claim
+    stays in the queue for the operator to fix.
+    """
+    claim = _make_claim_with_extraction(
+        db_session, {"plate": "34 ABC 123", "estimated_amount": 100.0}
+    )
+
+    response = client.post(
+        f"/queue/{claim.id}/approve",
+        json={"edits": {"plate": "06 XYZ 789", "estimated_amount": "1.250,50 TL"}},
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 400
+
+    reloaded = _reload(db_session, claim.id)
+    assert reloaded.status == "in_human_review"
+    assert reloaded.data["extraction"] == {"plate": "34 ABC 123", "estimated_amount": 100.0}
+
+    audit = (
+        db_session.execute(
+            select(AuditTrail).where(AuditTrail.claim_id == claim.id, AuditTrail.step == "approve")
+        )
+        .scalars()
+        .all()
+    )
+    assert audit == []
 
 
 # --- POST /queue/{id}/reject -------------------------------------------------

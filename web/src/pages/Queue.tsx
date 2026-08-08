@@ -5,6 +5,7 @@ import type { ClaimEdits, QueueResponse } from "../api/useQueue";
 import ClaimsTable from "../components/ClaimsTable";
 import QueueDetail from "../components/QueueDetail";
 import ShortcutHelp from "../components/ShortcutHelp";
+import ErrorScreen from "../components/ErrorScreen";
 
 // Reddi onaylama adımındayken "vazgeç" saymadığımız tuşlar: tek başına basılan
 // modifier'lar. Aksi halde Shift+/ ile '?' yazarken Shift'in kendisi akışı bozardı.
@@ -19,7 +20,7 @@ function isTypingTarget(target: EventTarget | null): boolean {
 }
 
 export default function Queue() {
-  const { data, isLoading, isError, error } = useQueue();
+  const { data, isLoading, isError, error, refetch } = useQueue();
   const { mutate: approveMutate, isPending: isApproving } = useApproveClaim();
   const { mutate: rejectMutate, isPending: isRejecting } = useRejectClaim();
   const queryClient = useQueryClient();
@@ -141,9 +142,11 @@ export default function Queue() {
 
       {isLoading && <p className="text-slate-500">Yükleniyor...</p>}
       {isError && (
-        <p className="text-red-600">
-          Kuyruk yüklenemedi: {error instanceof Error ? error.message : "Bilinmeyen hata"}
-        </p>
+        <ErrorScreen
+          title="Kuyruk yüklenemedi"
+          message={error instanceof Error ? error.message : "Bilinmeyen hata"}
+          onRetry={refetch}
+        />
       )}
 
       {data && items.length === 0 && (
