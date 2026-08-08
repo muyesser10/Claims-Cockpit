@@ -21,6 +21,8 @@ from eval.loader import EvalRecord
 from eval.scoring import RecordScore, from_dict, score_record, to_dict
 from worker.extraction.extractor import extract
 from worker.llm.client import LlmClient, ModelTier
+from worker.masking.pipeline import mask_all
+from worker.masking.unmask import unmask_data
 
 RESULTS_DIR = Path(__file__).resolve().parent / "results"
 
@@ -37,6 +39,10 @@ class RunOutcome:
     scores: list[RecordScore] = field(default_factory=list)
     failures: list[tuple[str, str]] = field(default_factory=list)
     model: str = ""
+    # Whether the text was masked before extraction, as production masks it.
+    # Travels with the numbers because a run on raw text and a run on masked
+    # text are measuring two different systems, not one system twice.
+    masked: bool = True
 
 
 def run_live(
@@ -47,19 +53,35 @@ def run_live(
     system_prompt: str | None = None,
     client: LlmClient | None = None,
     on_progress: Callable[[int, int, str], None] | None = None,
+    mask: bool = True,
 ) -> RunOutcome:
     """Extract and score every record, keeping going when one fails.
+
+    Runs the three steps the pipeline runs, in the order it runs them: mask the
+    text, extract from the masked copy, put the real values back
+    (worker/pipeline.py's step_extract).
+
+    Until 2026-08-08 this extracted from `record.text` directly, which measured a
+    system nobody runs - the model saw real names, plates and phone numbers where
+    production sees [NAME_1], [PLATE_1] and [PHONE_1]. It also asked the
+    unsupported-value check a different question, since a quote carrying a real
+    plate cannot be found in masked text.
+
+    `mask=False` restores the old behaviour. Not a compatibility shim: it is the
+    other half of a comparison, and what masking costs extraction accuracy is a
+    number worth having on purpose rather than by accident.
 
     The client is built once and reused: a fresh OpenAI client per record would
     throw away the connection pool for no reason on a run this long.
     """
     client = client or LlmClient()
-    outcome = RunOutcome(model=client.settings.model_for(tier))
+    outcome = RunOutcome(model=client.settings.model_for(tier), masked=mask)
 
     for index, record in enumerate(records, start=1):
+        text, mappings = mask_all(record.text) if mask else (record.text, [])
         try:
             result = extract(
-                record.text,
+                text,
                 record.received_at,
                 record.channel,
                 message_id=record.gt_id,
@@ -71,12 +93,16 @@ def run_live(
         except Exception as exc:  # noqa: BLE001 - recorded, not swallowed
             outcome.failures.append((record.gt_id, f"{type(exc).__name__}: {exc}"))
         else:
+            # The answer key holds real values, so the placeholders have to come
+            # back out before scoring - the same unmask the pipeline does before
+            # it stores the extraction.
+            extraction = unmask_data(result.extraction, mappings) if mappings else result.extraction
             outcome.scores.append(
                 score_record(
                     record.gt_id,
                     record.channel,
                     record.expected,
-                    result.extraction,
+                    extraction,
                     unverified_fields=result.unverified_fields,
                     duration_ms=result.duration_ms,
                     reasoning=result.reasoning,
@@ -107,6 +133,7 @@ def write_results(
             "model": outcome.model,
             "records": len(outcome.scores),
             "failures": outcome.failures,
+            "masked": outcome.masked,
             **(meta or {}),
         },
         "records": [to_dict(score) for score in outcome.scores],
