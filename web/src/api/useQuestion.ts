@@ -8,7 +8,10 @@ export interface QuestionSource {
   external_ref: string | null;
   snippet: string;
   score: number | null;
-  urgency: "critical" | "high" | "normal" | null; 
+  // Nullable: Claim.urgency is nullable in the database, so a claim that never
+  // made it past classification comes back without one. SourceChip falls back
+  // to a neutral dot rather than indexing undefined.
+  urgency: "critical" | "high" | "normal" | null;
   incident_date: string | null;
 }
 
@@ -24,75 +27,48 @@ export interface QuestionResponse {
   duration_ms: number;
 }
 
-// TODO(Çağrı, S3-2): swap this for a real POST /api/soru call once the
-// endpoint lands. Contract frozen by Çağrı — see team message. Mock covers
-// all three response shapes (retrieval with sources, sql with no sources,
-// answerable=false).
+// Fallbacks for the statuses the api's /soru proxy can produce without a body
+// worth showing. When it does send a Turkish `detail` — 503 and 504 both do —
+// that message wins: it says which hop failed, and this file cannot know.
+const STATUS_MESSAGES: Record<number, string> = {
+  401: "Oturumunuz sona ermiş görünüyor, lütfen tekrar giriş yapın.",
+  422: "Soru çok kısa veya çok uzun.",
+  503: "Soru servisine ulaşılamıyor.",
+  504: "Soru zaman aşımına uğradı, lütfen tekrar deneyin.",
+};
+
+async function errorMessage(res: Response): Promise<string> {
+  try {
+    const body = await res.json();
+    // FastAPI puts a string under `detail` for an HTTPException and a list of
+    // validation errors for a 422; only the string is worth showing an operator.
+    if (typeof body?.detail === "string") return body.detail;
+  } catch {
+    // Not JSON — fall through to the status message.
+  }
+  return STATUS_MESSAGES[res.status] ?? `Soru başarısız oldu (${res.status})`;
+}
+
 async function fetchAnswer(question: string): Promise<QuestionResponse> {
-  await new Promise((resolve) => setTimeout(resolve, 1500));
+  const res = await authenticatedFetch("/api/soru", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ question }),
+  });
 
-  const lower = question.toLowerCase();
-
-  if (lower.includes("kaç") || lower.includes("sayı")) {
-    return {
-      question,
-      answer: "Bu hafta toplam 12 kritik ihbar geldi.",
-      mode: "sql",
-      answerable: true,
-      refusal_reason: null,
-      sources: [],
-      sql: "SELECT COUNT(*) FROM claims WHERE urgency = 'critical' AND created_at >= now() - interval '7 days'",
-      row_count: 12,
-      duration_ms: 4200,
-    };
+  if (!res.ok) {
+    throw new Error(await errorMessage(res));
   }
-
-  if (lower.includes("bilmiyorum") || lower.includes("imkansız")) {
-    return {
-      question,
-      answer: null,
-      mode: "retrieval",
-      answerable: false,
-      refusal_reason: "Bu soruyu mevcut verilerle yanıtlayamıyorum.",
-      sources: [],
-      sql: null,
-      row_count: null,
-      duration_ms: 6100,
-    };
-  }
-
-  return {
-    question,
-    answer: "Son bir haftada İstanbul'da 3 çarpışma vakası bildirildi, ikisi kritik aciliyette.",
-    mode: "hybrid",
-    answerable: true,
-    refusal_reason: null,
-    sources: [
-      {
-        claim_id: 7,
-        external_ref: "GT-000007",
-        snippet: "aracima carptilar, plaka [PLATE_1]...",
-        score: 0.87,
-        urgency: "normal",
-        incident_date: "2026-08-03",
-      },
-      {
-        claim_id: 8,
-        external_ref: null,
-        snippet: "yarali var, ambulans cagirdik...",
-        score: 0.74,
-        urgency: "critical",
-        incident_date: null,
-      },
-    ],
-    sql: null,
-    row_count: null,
-    duration_ms: 9400,
-  };
+  return res.json();
 }
 
 export function useQuestion() {
+  // No retry: an answer costs 8-20 seconds and two or three LLM calls, so a
+  // silent second attempt would double both and leave the operator watching a
+  // spinner with no idea why. TanStack Query retries queries by default but not
+  // mutations, which is the behaviour wanted here — stated so it stays that way.
   return useMutation({
     mutationFn: fetchAnswer,
+    retry: false,
   });
 }

@@ -17,6 +17,7 @@ from worker.rag.answer import (
     answer_question,
     build_sources_block,
     build_system_prompt,
+    renumber_citations,
     split_citations,
 )
 from worker.rag.retrieval import RetrievedClaim
@@ -80,6 +81,50 @@ def test_only_cited_sources_come_back_in_the_models_order():
 
     assert [s.claim_id for s in result.sources] == [30, 10]
     assert result.invalid_citations == []
+
+
+def test_the_answers_numbers_follow_the_sources_it_ships_with():
+    """The bug this renumbering exists for.
+
+    Cite 1 and 3 out of five and only two chips come back; left alone, the [3]
+    in the prose points at a third chip that is not on screen.
+    """
+    sources = [_source(10), _source(20), _source(30), _source(40), _source(50)]
+    client = StubClient(_reply(answer="Önce şu [1], sonra şu [3].", used_sources=[1, 3]))
+
+    result = answer_question("soru", sources, question_id="q1", client=client)
+
+    assert result.answer == "Önce şu [1], sonra şu [2]."
+    assert [s.claim_id for s in result.sources] == [10, 30]
+
+
+def test_renumbering_follows_the_models_own_order():
+    sources = [_source(10), _source(20), _source(30)]
+    client = StubClient(_reply(answer="Önce [3], sonra [1].", used_sources=[3, 1]))
+
+    result = answer_question("soru", sources, question_id="q1", client=client)
+
+    # [3] was cited first, so it is the first chip - and now reads as [1].
+    assert result.answer == "Önce [1], sonra [2]."
+
+
+def test_a_marker_pointing_at_nothing_is_dropped_from_the_text():
+    sources = [_source(10), _source(20)]
+    client = StubClient(_reply(answer="Bir kaynak var [1], bir de bu [7].", used_sources=[1, 7]))
+
+    result = answer_question("soru", sources, question_id="q1", client=client)
+
+    # The unfollowable number is gone; the space it left behind is too.
+    assert result.answer == "Bir kaynak var [1], bir de bu."
+    assert result.invalid_citations == [7]
+
+
+def test_renumber_citations_leaves_an_already_correct_answer_alone():
+    assert renumber_citations("Tek kaynak [1].", [1]) == "Tek kaynak [1]."
+
+
+def test_renumber_citations_handles_two_markers_side_by_side():
+    assert renumber_citations("Cevap [2][4]", [2, 4]) == "Cevap [1][2]"
 
 
 def test_citation_pointing_at_nothing_is_reported_not_silently_dropped():

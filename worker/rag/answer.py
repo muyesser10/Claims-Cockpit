@@ -11,6 +11,7 @@ failure is invisible downstream: the number renders, the chip is missing, and
 nobody can tell whether the record behind the sentence ever existed.
 """
 
+import re
 import time
 from pathlib import Path
 
@@ -30,6 +31,8 @@ PROMPT_TEMPLATE = PROMPT_PATH.read_text(encoding="utf-8")
 # Same reason as schema_context.py's SCHEMA_PLACEHOLDER: the prompt is full of
 # brackets, so str.format() over it would fail or silently mangle an example.
 SOURCES_PLACEHOLDER = "<<SOURCES>>"
+
+CITATION_PATTERN = re.compile(r"\[(\d+)\]")
 
 NO_SOURCES_REFUSAL = "Soruyla eşleşen bir ihbar kaydı bulunamadı."
 UNSOURCED_REFUSAL = "Cevap üretildi ancak hiçbir kaynağa dayandırılamadı, bu yüzden gösterilmiyor."
@@ -87,8 +90,9 @@ class AnswerResult(BaseModel):
     answer: str | None
     refusal_reason: str | None
     reasoning: str
-    # Only the sources the model actually cited, in its own numbering order, so
-    # [1] in the text is the first chip on screen.
+    # Only the sources the model actually cited, in its own numbering order.
+    # `answer`'s markers are rewritten to match this list, so [1] in the text is
+    # the first chip on screen and [2] the second - see renumber_citations.
     sources: list[RetrievedClaim]
     # Numbers cited that point at no source. Kept rather than dropped silently:
     # this is the hallucination signal the error centre needs.
@@ -133,6 +137,32 @@ def split_citations(cited: list[int], source_count: int) -> tuple[list[int], lis
         else:
             invalid.append(number)
     return valid, invalid
+
+
+def renumber_citations(answer: str, valid: list[int]) -> str:
+    """Rewrite the answer's citation markers to match the sources it ships with.
+
+    Only cited sources come back, so a reply citing [1] and [3] out of five
+    arrives with two chips - and the [3] in its text then points at a chip that
+    is not on screen. Seen end to end on 2026-08-06: the model answered from
+    sources 1 and 3, the operator got two chips, and the second one was labelled
+    [3] in the prose with nothing to match it.
+
+    Numbers are remapped to their new position rather than left alone, and a
+    marker that resolves to nothing is dropped from the text: a number the
+    reader cannot follow to a source is worse than no number at all.
+    """
+    positions = {old: new for new, old in enumerate(valid, start=1)}
+
+    def replace(match: re.Match[str]) -> str:
+        new = positions.get(int(match.group(1)))
+        return f"[{new}]" if new is not None else ""
+
+    rewritten = CITATION_PATTERN.sub(replace, answer)
+    # Dropping a marker leaves the space in front of it behind, as "cümle ." or
+    # a double space mid-sentence.
+    rewritten = re.sub(r"\s+([.,;:!?])", r"\1", rewritten)
+    return re.sub(r" {2,}", " ", rewritten).strip()
 
 
 def answer_question(
@@ -215,7 +245,8 @@ def answer_question(
 
     return AnswerResult(
         answerable=reply.answerable,
-        answer=reply.answer,
+        # Renumbered to the filtered list: the text and the chips have to agree.
+        answer=renumber_citations(reply.answer, valid) if reply.answer else reply.answer,
         refusal_reason=reply.refusal_reason,
         reasoning=reply.reasoning,
         sources=[sources[number - 1] for number in valid],
