@@ -5,6 +5,7 @@ import Queue from './pages/Queue';
 import Question from './pages/Question';
 import Metrics from './pages/Metrics';
 import Login from './pages/Login';
+import ErrorBoundary from './components/ErrorBoundary';
 import { isAuthenticated, logout } from './api/auth';
 
 const navItems = [
@@ -62,48 +63,53 @@ function Shell({ children }: { children: ReactNode }) {
 
 export default function App() {
   return (
-    <Routes>
-      <Route path="/login" element={<Login />} />
-      <Route
-        path="/"
-        element={
-          <RequireAuth>
-            <Shell>
-              <Dashboard />
-            </Shell>
-          </RequireAuth>
-        }
-      />
-      <Route
-        path="/kuyruk"
-        element={
-          <RequireAuth>
-            <Shell>
-              <Queue />
-            </Shell>
-          </RequireAuth>
-        }
-      />
-      <Route
-        path="/soru"
-        element={
-          <RequireAuth>
-            <Shell>
-              <Question />
-            </Shell>
-          </RequireAuth>
-        }
-      />
-      <Route
-        path="/metrikler"
-        element={
-          <RequireAuth>
-            <Shell>
-              <Metrics />
-            </Shell>
-          </RequireAuth>
-        }
-      />
-    </Routes>
+    // Bütün route ağacını saran tek sınır: bir render hatası artık beyaz ekran
+    // yerine ErrorScreen gösteriyor. Sınır Routes'un dışında olduğu için
+    // fallback'te nav da görünmez — çıkış yolu retry butonu ya da sayfa yenileme.
+    <ErrorBoundary>
+      <Routes>
+        <Route path="/login" element={<Login />} />
+        <Route
+          path="/"
+          element={
+            <RequireAuth>
+              <Shell>
+                <Dashboard />
+              </Shell>
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/kuyruk"
+          element={
+            <RequireAuth>
+              <Shell>
+                <Queue />
+              </Shell>
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/soru"
+          element={
+            <RequireAuth>
+              <Shell>
+                <Question />
+              </Shell>
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/metrikler"
+          element={
+            <RequireAuth>
+              <Shell>
+                <Metrics />
+              </Shell>
+            </RequireAuth>
+          }
+        />
+      </Routes>
+    </ErrorBoundary>
   );
 }

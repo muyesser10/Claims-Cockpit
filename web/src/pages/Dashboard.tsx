@@ -6,17 +6,36 @@ import UrgencyDonut from "../components/UrgencyDonut";
 import CityBar from "../components/CityBar";
 import TrendChart from "../components/TrendChart";
 import Pulse from "../components/Pulse";
+import ErrorScreen from "../components/ErrorScreen";
 
 export default function Dashboard() {
-  const { data, isLoading, isError, error } = useClaims();
-  const { data: stats, isLoading: statsLoading, isError: statsError } = useStats();
+  // İki bağımsız sorgu: biri patlarken diğeri veri göstermeye devam ediyor,
+  // o yüzden hata gösterimi de bölüm bazında (compact) — tüm sayfayı kaplayan
+  // bir hata ekranı çalışan yarıyı da gizlerdi.
+  const { data, isLoading, isError, error, refetch } = useClaims();
+  const {
+    data: stats,
+    isLoading: statsLoading,
+    isError: statsIsError,
+    error: statsError,
+    refetch: refetchStats,
+  } = useStats();
 
   return (
     <div>
       <h1 className="text-xl font-semibold mb-4">Pano</h1>
 
       {statsLoading && <p className="text-slate-500">İstatistikler yükleniyor...</p>}
-      {statsError && <p className="text-red-600">İstatistikler yüklenemedi.</p>}
+      {statsIsError && (
+        <div className="mb-4">
+          <ErrorScreen
+            compact
+            title="İstatistikler yüklenemedi"
+            message={statsError instanceof Error ? statsError.message : "Bilinmeyen hata"}
+            onRetry={refetchStats}
+          />
+        </div>
+      )}
       {stats && (
         <>
           <div className="mb-4">
@@ -35,9 +54,12 @@ export default function Dashboard() {
 
       {isLoading && <p className="text-slate-500">Yükleniyor...</p>}
       {isError && (
-        <p className="text-red-600">
-          İhbarlar yüklenemedi: {error instanceof Error ? error.message : "Bilinmeyen hata"}
-        </p>
+        <ErrorScreen
+          compact
+          title="İhbarlar yüklenemedi"
+          message={error instanceof Error ? error.message : "Bilinmeyen hata"}
+          onRetry={refetch}
+        />
       )}
       {data && (
         <>
