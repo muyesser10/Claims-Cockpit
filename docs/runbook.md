@@ -82,9 +82,17 @@ curl -o /dev/null -w '%{http_code}\n' http://localhost:8000/queue   # 401
 
 `rag` servisi ilk açılışta embedding modelini indirir (471 MB) ve hazır olması
 ~26-45 sn sürer. Healthcheck'i `/health`'in `model_ready` alanına bakar, yani
-"healthy" olduğunda gerçekten soru alabilir demektir. api, rag healthy olana
-kadar başlamaz — kokpitin tamamı bu süre kadar geç açılır, bu bilinçli bir
-tercihtir (Soru ekranı açılır açılmaz 503 vermesin diye).
+`docker compose ps` "healthy" gösterdiğinde gerçekten soru alabilir demektir.
+
+**api, rag'i beklemez.** Bağımlılık `service_started` (`service_healthy` değil):
+Pano, Kuyruk ve Metrikler ekranlarının rag'e hiç ihtiyacı yok ve modelin
+yüklenmesini beklemek kokpitin tamamını ~40 sn geciktirirdi. Bunun bedeli şu:
+bu pencerede Soru ekranı kullanılırsa **503 + Türkçe hata mesajı** döner
+(`api/routers/question.py` erişilemeyen rag'i böyle karşılıyor). Kabul edilmiş
+bir ödünleşimdir, arıza değildir.
+
+> **Demoda:** Soru ekranını göstermeden önce `docker compose ps` ile `rag`
+> servisinin `healthy` olduğunu kontrol edin.
 
 Model `hf_cache` adlı named volume'de tutulur ve `worker` ile `rag` arasında
 paylaşılır; `docker compose down` (volume silmeden) sonrasında yeniden inmez.

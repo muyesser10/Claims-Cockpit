@@ -60,8 +60,14 @@ services:
      rag: { condition: service_started }
 
 
+  # Behind a profile, so `docker compose up` does not start it: ADR-001 put the
+  # pipeline on OpenAI and nothing reads OLLAMA_HOST any more, but this is the
+  # largest image in the file and every clean install was paying for it. Bring
+  # it up deliberately when a local-model fallback is being worked on:
+  #   docker compose --profile fallback up -d ollama
   ollama:
     image: ollama/ollama:latest
+    profiles: ["fallback"]
     ports:
       - "11434:11434"
     volumes:
@@ -76,6 +82,9 @@ services:
     env_file:
       - .env
     environment:
+      # Inert since ADR-001 - no code reads it. Kept in step with .env.example's
+      # "fallback, kept, not wired up yet" section rather than deleted, so a
+      # future fallback layer finds the wiring where it left it.
       - OLLAMA_HOST=http://ollama:11434
     ports: ["${WORKER_METRICS_HOST_PORT:-9100}:9100"]  # prometheus_client.start_http_server — worker/metrics.py
     volumes:
@@ -83,9 +92,12 @@ services:
       # each container re-downloads 471 MB on every recreate.
       - hf_cache:/root/.cache/huggingface
     depends_on:
+      # ollama is gone from this list because it sits behind the `fallback`
+      # profile now, and Compose refuses a dependency on a service its profile
+      # has not enabled. Nothing was lost: no code has reached ollama since
+      # ADR-001, so this was a wait for a container the worker never called.
       - db
       - redis
-      - ollama
     restart: always
 
   # 6. WEB
