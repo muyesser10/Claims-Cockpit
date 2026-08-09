@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-08-09T07:08:34.844620+00:00",
+  "generated_at": "2026-08-09T11:33:07.642137+00:00",
   "summary": {
     "total": 8,
     "passed": 5,
@@ -151,7 +151,7 @@
     {
       "key": "critical_recall",
       "label": "Kritik aciliyet recall",
-      "value": 0.7368421052631579,
+      "value": 0.7894736842105263,
       "unit": "ratio",
       "target": 0.97,
       "target_operator": "gte",
@@ -162,10 +162,10 @@
       },
       "source": {
         "run": "injury_recall.json",
-        "measured_at": "2026-08-07",
+        "measured_at": "2026-08-09",
         "model": null
       },
-      "numerator": 14,
+      "numerator": 15,
       "denominator": 19,
       "breakdown": [
         {
@@ -176,14 +176,14 @@
         },
         {
           "label": "deterministik katman, kanonik olmayan",
-          "value": 0.0,
-          "numerator": 0,
+          "value": 0.21052631578947367,
+          "numerator": 4,
           "denominator": 19
         },
         {
           "label": "pipeline, Türkçe karakteri düşmüş ifadeler",
-          "value": 0.8,
-          "numerator": 4,
+          "value": 1.0,
+          "numerator": 5,
           "denominator": 5
         },
         {
@@ -195,8 +195,8 @@
       ],
       "notes": [
         "Manşet sayı korpusun değil, fixture'ın sayısıdır. Korpus üzerinden ölçüldüğünde bu metrik %100 verir; ama oradaki kritik kayıtların hepsi dört sabit cümleden birini taşıyor ve dördü de kanonik bir yaralanma terimi içeriyor — yani o %100 kalıbı ölçüyor, sistemin erişimini değil.",
-        "Deterministik katman bu ifadelerin 0/19 tanesini yakalıyor; geri kalanı LLM taşıyor. Sağlayıcı fallback'i olmadığı sürece bu metrik tek bir servise bağlı.",
-        "Yaralanma içermeyen 15 kontrol ifadesinin 9 tanesi yanlışlıkla kritik işaretleniyor — recall'ın karşı tarafı."
+        "Deterministik katman bu ifadelerin 4/19 tanesini yakalıyor; geri kalanı LLM taşıyor. Sağlayıcı fallback'i olmadığı sürece bu metrik tek bir servise bağlı.",
+        "Yaralanma içermeyen 15 kontrol ifadesinin 5 tanesi yanlışlıkla kritik işaretleniyor — recall'ın karşı tarafı."
       ],
       "status": "fail"
     },

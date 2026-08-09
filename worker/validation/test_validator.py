@@ -173,21 +173,18 @@ def test_a_term_buried_inside_another_word_does_not_flag():
         assert not any(f["rule"] == "injury_keyword_mismatch" for f in flags), text
 
 
-def test_a_word_that_merely_starts_with_a_term_still_flags_known_gap():
-    """Records a gap this change does NOT close, so it is not mistaken for
-    solved.
+def test_a_word_that_merely_starts_with_a_term_no_longer_flags():
+    """The gap the previous version of this test recorded, now closed.
 
-    find_injury_signals requires a term to start a word but not to end one, so
-    "kan" matches "kanal", "kanat" and "kanaat". Closing it means touching
-    worker/shared/injury_terms.py, which masking and the classifier's override
-    also read, so it needs its own false-positive measurement first.
-
-    When this test fails, the gap has been closed - delete it rather than
-    restoring the behaviour.
+    It asked for "Kanal kenarında" to flag, and said in its own docstring that
+    when it failed the gap had been closed and it should be deleted rather than
+    restored. worker/shared/injury_terms.py replaced the bare "kan" with the
+    forms that assert bleeding, and the false-positive measurement it asked for
+    came with it: corpus precision went 98.8% -> 100% at unchanged recall.
     """
     flags = validate(_with(injury=False), "Kanal kenarında park halindeydi.")
 
-    assert any(f["rule"] == "injury_keyword_mismatch" for f in flags)
+    assert not any(f["rule"] == "injury_keyword_mismatch" for f in flags)
 
 
 def test_a_negated_injury_does_not_flag():
