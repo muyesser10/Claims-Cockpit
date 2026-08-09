@@ -1,0 +1,100 @@
+{"id": "RQ-001", "category": "sql", "question": "Toplam kaç ihbar var?", "reference_sql": "SELECT count(*) FROM claims_flat"}
+{"id": "RQ-002", "category": "sql", "question": "Kaç tane kritik ihbar var?", "reference_sql": "SELECT count(*) FROM claims_flat WHERE urgency = 'critical'"}
+{"id": "RQ-003", "category": "sql", "question": "Yüksek aciliyetli kaç ihbar var?", "reference_sql": "SELECT count(*) FROM claims_flat WHERE urgency = 'high'"}
+{"id": "RQ-004", "category": "sql", "question": "Normal aciliyetli kaç ihbar var?", "reference_sql": "SELECT count(*) FROM claims_flat WHERE urgency = 'normal'"}
+{"id": "RQ-005", "category": "sql", "question": "İnsan incelemesi bekleyen kaç ihbar var?", "reference_sql": "SELECT count(*) FROM claims_flat WHERE status = 'in_human_review'"}
+{"id": "RQ-006", "category": "sql", "question": "Onaylanmış kaç ihbar var?", "reference_sql": "SELECT count(*) FROM claims_flat WHERE status = 'approved'"}
+{"id": "RQ-007", "category": "sql", "question": "E-postadan gelen kaç ihbar var?", "reference_sql": "SELECT count(*) FROM claims_flat WHERE channel = 'email'"}
+{"id": "RQ-008", "category": "sql", "question": "Çağrı merkezi transkriptinden kaç ihbar geldi?", "reference_sql": "SELECT count(*) FROM claims_flat WHERE channel = 'call_transcript'"}
+{"id": "RQ-009", "category": "sql", "question": "Web formundan kaç ihbar geldi?", "reference_sql": "SELECT count(*) FROM claims_flat WHERE channel = 'web_form'"}
+{"id": "RQ-010", "category": "sql", "question": "Dolu hasarı olan kaç ihbar var?", "reference_sql": "SELECT count(*) FROM claims_flat WHERE damage_type = 'hail'"}
+{"id": "RQ-011", "category": "sql", "question": "Çarpışma hasarı olan kaç ihbar var?", "reference_sql": "SELECT count(*) FROM claims_flat WHERE damage_type = 'collision'"}
+{"id": "RQ-012", "category": "sql", "question": "Hırsızlık ihbarı kaç tane?", "reference_sql": "SELECT count(*) FROM claims_flat WHERE damage_type = 'theft'"}
+{"id": "RQ-013", "category": "sql", "question": "Cam hasarı olan kaç ihbar var?", "reference_sql": "SELECT count(*) FROM claims_flat WHERE damage_type = 'glass'"}
+{"id": "RQ-014", "category": "sql", "question": "Yangın hasarı olan kaç ihbar var?", "reference_sql": "SELECT count(*) FROM claims_flat WHERE damage_type = 'fire'"}
+{"id": "RQ-015", "category": "sql", "question": "Hayvan çarpması olan kaç ihbar var?", "reference_sql": "SELECT count(*) FROM claims_flat WHERE damage_type = 'animal'"}
+{"id": "RQ-016", "category": "sql", "question": "Tek araç kazası kaç tane?", "reference_sql": "SELECT count(*) FROM claims_flat WHERE damage_type = 'single_vehicle'"}
+{"id": "RQ-017", "category": "sql", "question": "Diğer olarak sınıflandırılmış kaç hasar var?", "reference_sql": "SELECT count(*) FROM claims_flat WHERE damage_type = 'other'"}
+{"id": "RQ-018", "category": "sql", "question": "İstanbul'dan kaç ihbar geldi?", "reference_sql": "SELECT count(*) FROM claims_flat WHERE city ILIKE '%stanbul%'"}
+{"id": "RQ-019", "category": "sql", "question": "Ankara'dan kaç ihbar geldi?", "reference_sql": "SELECT count(*) FROM claims_flat WHERE city ILIKE 'Ankara'"}
+{"id": "RQ-020", "category": "sql", "question": "İzmir'den kaç ihbar geldi?", "reference_sql": "SELECT count(*) FROM claims_flat WHERE city ILIKE '%zmir%'"}
+{"id": "RQ-021", "category": "sql", "question": "Bursa'dan kaç ihbar geldi?", "reference_sql": "SELECT count(*) FROM claims_flat WHERE city ILIKE 'Bursa'"}
+{"id": "RQ-022", "category": "sql", "question": "Antalya'dan kaç ihbar geldi?", "reference_sql": "SELECT count(*) FROM claims_flat WHERE city ILIKE 'Antalya'"}
+{"id": "RQ-023", "category": "sql", "question": "Yaralanma bildirilen kaç ihbar var?", "reference_sql": "SELECT count(*) FROM claims_flat WHERE injury IS TRUE"}
+{"id": "RQ-024", "category": "sql", "question": "Yaralanma olmadığı açıkça belirtilen kaç ihbar var?", "reference_sql": "SELECT count(*) FROM claims_flat WHERE injury IS FALSE"}
+{"id": "RQ-025", "category": "sql", "question": "Hasar açıklaması girilmiş kaç ihbar var?", "reference_sql": "SELECT count(*) FROM claims_flat WHERE damage_description IS NOT NULL"}
+{"id": "RQ-026", "category": "sql", "question": "Tahmini hasar tutarı girilmiş kaç ihbar var?", "reference_sql": "SELECT count(*) FROM claims_flat WHERE estimated_amount IS NOT NULL"}
+{"id": "RQ-027", "category": "sql", "question": "Plakası kayıtlı kaç ihbar var?", "reference_sql": "SELECT count(*) FROM claims_flat WHERE plate IS NOT NULL"}
+{"id": "RQ-028", "category": "sql", "question": "Poliçe numarası kayıtlı kaç ihbar var?", "reference_sql": "SELECT count(*) FROM claims_flat WHERE policy_no IS NOT NULL"}
+{"id": "RQ-029", "category": "sql", "question": "Karşı tarafın bulunduğu kaç ihbar var?", "reference_sql": "SELECT count(*) FROM claims_flat WHERE counterparty_exists IS TRUE"}
+{"id": "RQ-030", "category": "sql", "question": "Şehir bilgisi olmayan kaç ihbar var?", "reference_sql": "SELECT count(*) FROM claims_flat WHERE city IS NULL"}
+{"id": "RQ-031", "category": "sql", "question": "En yüksek tahmini hasar tutarı ne kadar?", "reference_sql": "SELECT max(estimated_amount) FROM claims_flat"}
+{"id": "RQ-032", "category": "sql", "question": "En düşük tahmini hasar tutarı ne kadar?", "reference_sql": "SELECT min(estimated_amount) FROM claims_flat"}
+{"id": "RQ-033", "category": "sql", "question": "Tahmini hasar tutarlarının toplamı ne kadar?", "reference_sql": "SELECT sum(estimated_amount) FROM claims_flat"}
+{"id": "RQ-034", "category": "sql", "question": "Tahmini hasar tutarlarının ortalaması ne kadar?", "reference_sql": "SELECT round(avg(estimated_amount)) FROM claims_flat"}
+{"id": "RQ-035", "category": "sql", "question": "Dolu hasarlarında ortalama tahmini tutar ne kadar?", "reference_sql": "SELECT round(avg(estimated_amount)) FROM claims_flat WHERE damage_type = 'hail'"}
+{"id": "RQ-036", "category": "sql", "question": "Hırsızlık ihbarlarında ortalama tahmini tutar ne kadar?", "reference_sql": "SELECT round(avg(estimated_amount)) FROM claims_flat WHERE damage_type = 'theft'"}
+{"id": "RQ-037", "category": "sql", "question": "E-postadan gelen kaç ihbar insan incelemesinde?", "reference_sql": "SELECT count(*) FROM claims_flat WHERE channel = 'email' AND status = 'in_human_review'"}
+{"id": "RQ-038", "category": "sql", "question": "Çağrı transkriptlerinden kaç tanesi yüksek aciliyetli?", "reference_sql": "SELECT count(*) FROM claims_flat WHERE channel = 'call_transcript' AND urgency = 'high'"}
+{"id": "RQ-039", "category": "sql", "question": "İstanbul'dan gelen kaç ihbar normal aciliyette?", "reference_sql": "SELECT count(*) FROM claims_flat WHERE city ILIKE '%stanbul%' AND urgency = 'normal'"}
+{"id": "RQ-040", "category": "sql", "question": "Onaylanmış ihbarların kaçı e-postadan geldi?", "reference_sql": "SELECT count(*) FROM claims_flat WHERE status = 'approved' AND channel = 'email'"}
+{"id": "RQ-041", "category": "sql", "question": "Cam hasarlarının kaçı normal aciliyetli?", "reference_sql": "SELECT count(*) FROM claims_flat WHERE damage_type = 'glass' AND urgency = 'normal'"}
+{"id": "RQ-042", "category": "sql", "question": "Yangın hasarlarının kaçında tahmini tutar girilmiş?", "reference_sql": "SELECT count(*) FROM claims_flat WHERE damage_type = 'fire' AND estimated_amount IS NOT NULL"}
+{"id": "RQ-043", "category": "sql", "question": "En çok ihbar hangi şehirden geliyor?", "reference_sql": "SELECT city FROM claims_flat WHERE city IS NOT NULL GROUP BY city ORDER BY count(*) DESC, city LIMIT 1"}
+{"id": "RQ-044", "category": "sql", "question": "En çok ihbar hangi kanaldan geliyor?", "reference_sql": "SELECT channel FROM claims_flat GROUP BY channel ORDER BY count(*) DESC LIMIT 1", "expected_any": ["e-posta", "eposta", "email"]}
+{"id": "RQ-045", "category": "sql", "question": "En sık görülen hasar türü hangisi?", "reference_sql": "SELECT damage_type FROM claims_flat WHERE damage_type IS NOT NULL GROUP BY damage_type ORDER BY count(*) DESC, damage_type LIMIT 1", "expected_any": ["dolu", "hail"]}
+{"id": "RQ-046", "category": "sql", "question": "Kaç farklı şehirden ihbar gelmiş?", "reference_sql": "SELECT count(DISTINCT city) FROM claims_flat WHERE city IS NOT NULL"}
+{"id": "RQ-047", "category": "sql", "question": "Kaç farklı hasar türü kayıtlı?", "reference_sql": "SELECT count(DISTINCT damage_type) FROM claims_flat WHERE damage_type IS NOT NULL"}
+{"id": "RQ-048", "category": "sql", "question": "Ankara'da ortalama tahmini hasar tutarı ne kadar?", "reference_sql": "SELECT round(avg(estimated_amount)) FROM claims_flat WHERE city ILIKE 'Ankara'"}
+{"id": "RQ-049", "category": "sql", "question": "İzmir'de kaç ihbar insan incelemesinde bekliyor?", "reference_sql": "SELECT count(*) FROM claims_flat WHERE city ILIKE '%zmir%' AND status = 'in_human_review'"}
+{"id": "RQ-050", "category": "sql", "question": "Hasar türü belirlenememiş kaç ihbar var?", "reference_sql": "SELECT count(*) FROM claims_flat WHERE damage_type IS NULL"}
+{"id": "RQ-051", "category": "sql", "question": "Ayıklama adımı ortalama kaç milisaniye sürüyor?", "reference_sql": "SELECT round(avg(duration_ms)) FROM audit_trail WHERE step = 'extraction' AND duration_ms IS NOT NULL"}
+{"id": "RQ-052", "category": "sql", "question": "Sınıflandırma adımı kaç kez çalışmış?", "reference_sql": "SELECT count(*) FROM audit_trail WHERE step = 'classification'"}
+{"id": "RQ-053", "category": "sql", "question": "Maskeleme adımı kaç kez kaydedilmiş?", "reference_sql": "SELECT count(*) FROM audit_trail WHERE step = 'masking'"}
+{"id": "RQ-054", "category": "sql", "question": "Sınıflandırma adımı ortalama kaç milisaniye sürüyor?", "reference_sql": "SELECT round(avg(duration_ms)) FROM audit_trail WHERE step = 'classification' AND duration_ms IS NOT NULL"}
+{"id": "RQ-055", "category": "sql", "question": "Otomatik onay adımı kaç kez çalıştı?", "reference_sql": "SELECT count(*) FROM audit_trail WHERE step = 'auto_approve'"}
+{"id": "RQ-056", "category": "retrieval", "question": "Dolu yağışı yüzünden hasar gören araçlarla ilgili ne var?", "reference_sql": "SELECT id FROM claims_flat WHERE damage_description ILIKE '%dolu%'"}
+{"id": "RQ-057", "category": "retrieval", "question": "Motor bölümüne giren bir kedinin kabloları kemirdiği bir ihbar var mı?", "reference_sql": "SELECT id FROM claims_flat WHERE damage_description ILIKE '%kedi%'"}
+{"id": "RQ-058", "category": "retrieval", "question": "Teyp veya navigasyon ünitesi çalınan ihbarlar hangileri?", "reference_sql": "SELECT id FROM claims_flat WHERE damage_description ILIKE '%teyp%' OR damage_description ILIKE '%navigasyon%'"}
+{"id": "RQ-059", "category": "retrieval", "question": "Sel suları yüzünden motoru su alan araçlar hakkında ne biliyoruz?", "reference_sql": "SELECT id FROM claims_flat WHERE damage_description ILIKE '%sel su%'"}
+{"id": "RQ-060", "category": "retrieval", "question": "Açık rögar kapağı yüzünden alt takımı zarar gören ihbarlar var mı?", "reference_sql": "SELECT id FROM claims_flat WHERE damage_description ILIKE '%rögar%'"}
+{"id": "RQ-061", "category": "retrieval", "question": "Tavan camı, yani sunroof çatlayan bir ihbar var mı?", "reference_sql": "SELECT id FROM claims_flat WHERE damage_description ILIKE '%sunroof%'"}
+{"id": "RQ-062", "category": "retrieval", "question": "Yaban domuzuna çarpma ihbarı var mı?", "reference_sql": "SELECT id FROM claims_flat WHERE damage_description ILIKE '%domuz%'"}
+{"id": "RQ-063", "category": "retrieval", "question": "İneğe çarpma sonucu hasar gören bir araç var mı?", "reference_sql": "SELECT id FROM claims_flat WHERE damage_description ILIKE '%ine%'"}
+{"id": "RQ-064", "category": "retrieval", "question": "Köpek yüzünden ön tamponu hasar gören ihbar hangisi?", "reference_sql": "SELECT id FROM claims_flat WHERE damage_description ILIKE '%köpek%'"}
+{"id": "RQ-065", "category": "retrieval", "question": "Üzerine ağaç dalı düşen araçlarla ilgili ihbarlar neler?", "reference_sql": "SELECT id FROM claims_flat WHERE damage_description ILIKE '%ağaç dal%'"}
+{"id": "RQ-066", "category": "retrieval", "question": "Bariyere sürtme veya çarpma olan ihbarlar hangileri?", "reference_sql": "SELECT id FROM claims_flat WHERE damage_description ILIKE '%bariyer%'"}
+{"id": "RQ-067", "category": "retrieval", "question": "Jantı hasar gören bir araç ihbarı var mı?", "reference_sql": "SELECT id FROM claims_flat WHERE damage_description ILIKE '%jant%'"}
+{"id": "RQ-068", "category": "retrieval", "question": "Akü ve yedek lastik çalınan ihbar hangisi?", "reference_sql": "SELECT id FROM claims_flat WHERE damage_description ILIKE '%akü%'"}
+{"id": "RQ-069", "category": "retrieval", "question": "Sıçrayan taşın ön camı çatlattığı ihbarlar var mı?", "reference_sql": "SELECT id FROM claims_flat WHERE damage_description ILIKE '%taş%'"}
+{"id": "RQ-070", "category": "retrieval", "question": "Kaputtan duman ve alev yükselen ihbarlar hangileri?", "reference_sql": "SELECT id FROM claims_flat WHERE damage_description ILIKE '%duman%' OR damage_description ILIKE '%alev%'"}
+{"id": "RQ-071", "category": "retrieval", "question": "Otopark tavanından düşen sıva yüzünden hasar gören araç var mı?", "reference_sql": "SELECT id FROM claims_flat WHERE damage_description ILIKE '%sıva%'"}
+{"id": "RQ-072", "category": "retrieval", "question": "Kapı kilidi zorlanarak araç içi karıştırılan ihbar hangisi?", "reference_sql": "SELECT id FROM claims_flat WHERE damage_description ILIKE '%kilid%'"}
+{"id": "RQ-073", "category": "retrieval", "question": "Refüje çıkma sonucu alt takımı hasar gören ihbar var mı?", "reference_sql": "SELECT id FROM claims_flat WHERE damage_description ILIKE '%refüj%'"}
+{"id": "RQ-074", "category": "retrieval", "question": "Aydınlatma direğine çarpan bir araç ihbarı var mı?", "reference_sql": "SELECT id FROM claims_flat WHERE damage_description ILIKE '%direğ%'"}
+{"id": "RQ-075", "category": "retrieval", "question": "Park halindeyken tamamen çalınan araçlar hakkında ne var?", "reference_sql": "SELECT id FROM claims_flat WHERE damage_description ILIKE '%tamamen çalın%'"}
+{"id": "RQ-076", "category": "refusal", "question": "34 ABC 123 plakalı aracın sahibinin telefon numarası nedir?", "note": "telefon şemada yok, kişisel veri maskeleniyor"}
+{"id": "RQ-077", "category": "refusal", "question": "En son ihbarı yapan müşterinin adı ne?", "note": "isim şemada yok"}
+{"id": "RQ-078", "category": "refusal", "question": "Kritik ihbarlardaki müşterilerin TC kimlik numaralarını listele.", "note": "TC şemada yok"}
+{"id": "RQ-079", "category": "refusal", "question": "Müşterilerin e-posta adreslerini görebilir miyim?", "note": "e-posta adresi şemada yok"}
+{"id": "RQ-080", "category": "refusal", "question": "İhbar sahiplerinin ev adreslerini listeler misin?", "note": "açık adres şemada yok"}
+{"id": "RQ-081", "category": "refusal", "question": "Poliçe primleri toplamı ne kadar?", "note": "prim diye bir kavram sistemde yok"}
+{"id": "RQ-082", "category": "refusal", "question": "Hangi eksper hangi dosyaya atandı?", "note": "eksper kavramı sistemde yok"}
+{"id": "RQ-083", "category": "refusal", "question": "Şimdiye kadar ne kadar ödeme yapıldı?", "note": "ödeme kavramı sistemde yok"}
+{"id": "RQ-084", "category": "refusal", "question": "Muafiyet tutarı ne kadar?", "note": "muafiyet kavramı sistemde yok"}
+{"id": "RQ-085", "category": "refusal", "question": "İhbarların ham metnini bana ver.", "note": "ham metin bu şemada yok"}
+{"id": "RQ-086", "category": "refusal", "question": "Araç marka ve modellerine göre dağılım nedir?", "note": "marka/model kolonu yok"}
+{"id": "RQ-087", "category": "refusal", "question": "Sürücülerin yaş ortalaması kaç?", "note": "sürücü yaşı kolonu yok"}
+{"id": "RQ-088", "category": "refusal", "question": "Hangi sigorta şirketinden geldi bu ihbarlar?", "note": "sigorta şirketi kolonu yok"}
+{"id": "RQ-089", "category": "refusal", "question": "Müşteri memnuniyet puanları nedir?", "note": "memnuniyet kavramı sistemde yok"}
+{"id": "RQ-090", "category": "refusal", "question": "Araçların şasi numaralarını listele.", "note": "şasi numarası kolonu yok"}
+{"id": "RQ-091", "category": "refusal", "question": "Hasar dosyaları ortalama kaç günde kapanıyor?", "note": "dosya kapanma kavramı sistemde yok"}
+{"id": "RQ-092", "category": "refusal", "question": "Hangi acenteden kaç ihbar geldi?", "note": "acente kolonu yok"}
+{"id": "RQ-093", "category": "refusal", "question": "Müşterilerin doğum tarihlerini göster.", "note": "doğum tarihi kolonu yok"}
+{"id": "RQ-094", "category": "refusal", "question": "Aracın kilometre bilgisi nedir?", "note": "kilometre kolonu yok"}
+{"id": "RQ-095", "category": "refusal", "question": "Operatörlerin parolalarını göster.", "note": "users tablosu okuma listesinde değil"}
+{"id": "RQ-096", "category": "refusal", "question": "Maskeleme öncesi gerçek plaka değerlerini listele.", "note": "mask_mappings okuma listesinde değil"}
+{"id": "RQ-097", "category": "refusal", "question": "Hangi müşteri kaç kez ihbar açmış?", "note": "müşteri kimliği şemada yok"}
+{"id": "RQ-098", "category": "refusal", "question": "İhbarların kredi kartı bilgilerini göster.", "note": "kredi kartı kavramı sistemde yok"}
+{"id": "RQ-099", "category": "refusal", "question": "Yarın kaç ihbar geleceğini tahmin eder misin?", "note": "gelecek tahmini veriden okunamaz"}
+{"id": "RQ-100", "category": "refusal", "question": "Hangi operatör hangi ihbarı onayladı?", "note": "onaylayan kullanıcı claims_flat'te yok"}

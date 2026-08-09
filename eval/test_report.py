@@ -259,6 +259,11 @@ def _write_inputs(tmp_path: Path) -> dict[str, Path]:
         "injury": injury,
         "masking": masking,
         "manual": manual,
+        # Absent on purpose, and named rather than left to default: without it
+        # build() falls back to eval/results/rag.json, and these tests would
+        # then pass or fail depending on whether someone had run the RAG eval
+        # on this machine.
+        "rag": tmp_path / "absent-rag.json",
     }
 
 
@@ -292,6 +297,38 @@ def test_rag_stays_in_the_table_while_it_is_unmeasured(tmp_path: Path):
     (rag,) = [row for row in payload["metrics"] if row["key"] == "rag_accuracy"]
     assert rag["value"] is None
     assert rag["status"] == "unmeasured"
+
+
+def test_a_rag_run_is_scored_per_category_as_well_as_overall(tmp_path: Path):
+    """The three categories fail for different reasons - a wrong number, a
+    missed document, a fabricated capability - and one blended percentage would
+    say which of those went wrong: nothing."""
+    inputs = _write_inputs(tmp_path)
+    rag_run = tmp_path / "rag.json"
+    rag_run.write_text(
+        json.dumps(
+            {
+                "meta": {"run_at": "2026-08-09T14:00:00+00:00"},
+                "outcomes": [
+                    {"category": "sql", "passed": True},
+                    {"category": "sql", "passed": False},
+                    {"category": "retrieval", "passed": True},
+                    {"category": "refusal", "passed": True},
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    inputs["rag"] = rag_run
+
+    payload = build(**inputs)
+    (rag,) = [row for row in payload["metrics"] if row["key"] == "rag_accuracy"]
+
+    assert rag["numerator"] == 3
+    assert rag["denominator"] == 4
+    assert rag["source"]["measured_at"] == "2026-08-09"
+    per_category = {item["label"]: item["denominator"] for item in rag["breakdown"]}
+    assert sorted(per_category.values()) == [1, 1, 2]
 
 
 def test_every_measured_row_says_where_and_when_it_came_from(tmp_path: Path):

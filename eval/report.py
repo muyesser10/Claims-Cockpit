@@ -39,6 +39,7 @@ DEFAULT_EXTRACTION = RESULTS_DIR / "run_masked_baseline.json"
 DEFAULT_GATE = RESULTS_DIR / "gate_post62.json"
 DEFAULT_INJURY = RESULTS_DIR / "injury_recall.json"
 DEFAULT_MASKING = RESULTS_DIR / "masking_recall.json"
+DEFAULT_RAG = RESULTS_DIR / "rag.json"
 DEFAULT_MANUAL = REPORTS_DIR / "manual_inputs.json"
 DEFAULT_OUT = REPORTS_DIR / "quality_report.json"
 
@@ -459,22 +460,78 @@ def manual_metrics(manual: dict) -> list[Metric]:
     ]
 
 
-def rag_metric() -> Metric:
-    """§7's eighth row, honestly empty."""
+def rag_metric(path: Path) -> Metric:
+    """§7's eighth row. Empty until eval/rag.py has been run.
+
+    Stays in the table either way: an unmeasured target and a met one are
+    different things, and only one of them should be invisible.
+    """
+    if not path.exists():
+        return Metric(
+            key="rag_accuracy",
+            label="RAG doğruluğu",
+            value=None,
+            unit="ratio",
+            target=0.65,
+            target_operator="gte",
+            sample=Sample(n=None, unit="soru", description=""),
+            source=None,
+            notes=[
+                "Henüz ölçülmedi. `python -m eval.rag` ile ölçülür; veritabanı ve API "
+                "anahtarı ister.",
+            ],
+        )
+
+    raw = json.loads(path.read_text(encoding="utf-8"))
+    outcomes = raw["outcomes"]
+    meta = raw.get("meta", {})
+    passed = sum(1 for row in outcomes if row["passed"])
+
+    by_category: dict[str, tuple[int, int]] = {}
+    for row in outcomes:
+        hits, total = by_category.get(row["category"], (0, 0))
+        by_category[row["category"]] = (hits + int(row["passed"]), total + 1)
+
     return Metric(
         key="rag_accuracy",
         label="RAG doğruluğu",
-        value=None,
+        value=passed / len(outcomes) if outcomes else None,
         unit="ratio",
+        numerator=passed,
+        denominator=len(outcomes),
         target=0.65,
         target_operator="gte",
-        sample=Sample(n=None, unit="soru", description=""),
-        source=None,
+        sample=Sample(
+            n=len(outcomes),
+            unit="soru",
+            description="elle yazılmış değerlendirme seti, canlı veritabanına karşı",
+        ),
+        source=Source(run=path.name, measured_at=_measured_at(meta)),
+        breakdown=[
+            Breakdown(
+                label=RAG_CATEGORY_LABELS.get(name, name),
+                value=hits / total if total else None,
+                numerator=hits,
+                denominator=total,
+            )
+            for name, (hits, total) in by_category.items()
+        ],
         notes=[
-            "Henüz ölçülmedi: değerlendirme seti yok. Tabloda boş bırakılıyor, gizlenmiyor — "
-            "ölçülmemiş bir metrik, tutmuş bir metrikten farklıdır.",
+            "Her sorunun cevap anahtarı kendisiyle geliyor: sayısal sorular aynı "
+            "veritabanına karşı koşan bir referans sorguyla, erişim soruları bulunması "
+            "gereken ihbar listesiyle, reddetme soruları da cevaplanmaması gerektiğiyle "
+            "doğrulanıyor. Anahtar elle yazılmadığı için eskimiyor.",
+            "Sorular canlı veritabanının içeriğinden türetildi, korpustan değil — RAG "
+            "korpusu değil veritabanını okuyor.",
         ],
     )
+
+
+RAG_CATEGORY_LABELS = {
+    "sql": "Sayısal sorular (SQL yolu)",
+    "retrieval": "İçerik soruları (arama yolu)",
+    "refusal": "Reddedilmesi gerekenler",
+}
 
 
 def build(
@@ -484,6 +541,7 @@ def build(
     injury: Path = DEFAULT_INJURY,
     masking: Path = DEFAULT_MASKING,
     manual: Path = DEFAULT_MANUAL,
+    rag: Path = DEFAULT_RAG,
 ) -> dict:
     """The whole §7 table, in the order §7 lists it."""
     manual_data = json.loads(manual.read_text(encoding="utf-8")) if manual.exists() else {}
@@ -495,7 +553,7 @@ def build(
         critical_recall_metric(injury, measured_at=provenance.get(injury.name)),
         masking_recall_metric(masking, measured_at=provenance.get(masking.name)),
         *manual_metrics(manual_data),
-        rag_metric(),
+        rag_metric(rag),
     ]
 
     # Keyed by status, but spelled out: "pass" is a Python keyword and this
@@ -551,6 +609,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--injury", type=Path, default=DEFAULT_INJURY)
     parser.add_argument("--masking", type=Path, default=DEFAULT_MASKING)
     parser.add_argument("--manual", type=Path, default=DEFAULT_MANUAL)
+    parser.add_argument("--rag", type=Path, default=DEFAULT_RAG)
     parser.add_argument("--out", type=Path, default=DEFAULT_OUT)
     args = parser.parse_args(argv)
 
@@ -560,6 +619,7 @@ def main(argv: list[str] | None = None) -> int:
         injury=args.injury,
         masking=args.masking,
         manual=args.manual,
+        rag=args.rag,
     )
     print(format_report(payload))
 

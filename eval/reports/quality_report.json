@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-08-09T11:33:07.642137+00:00",
+  "generated_at": "2026-08-09T11:57:11.496513+00:00",
   "summary": {
     "total": 8,
-    "passed": 5,
+    "passed": 6,
     "failed": 2,
-    "unmeasured": 1
+    "unmeasured": 0
   },
   "metrics": [
     {
@@ -275,23 +275,47 @@
     {
       "key": "rag_accuracy",
       "label": "RAG doğruluğu",
-      "value": null,
+      "value": 0.88,
       "unit": "ratio",
       "target": 0.65,
       "target_operator": "gte",
       "sample": {
-        "n": null,
+        "n": 100,
         "unit": "soru",
-        "description": ""
+        "description": "elle yazılmış değerlendirme seti, canlı veritabanına karşı"
       },
-      "source": null,
-      "numerator": null,
-      "denominator": null,
-      "breakdown": [],
-      "notes": [
-        "Henüz ölçülmedi: değerlendirme seti yok. Tabloda boş bırakılıyor, gizlenmiyor — ölçülmemiş bir metrik, tutmuş bir metrikten farklıdır."
+      "source": {
+        "run": "rag.json",
+        "measured_at": "2026-08-09",
+        "model": null
+      },
+      "numerator": 88,
+      "denominator": 100,
+      "breakdown": [
+        {
+          "label": "Sayısal sorular (SQL yolu)",
+          "value": 0.8181818181818182,
+          "numerator": 45,
+          "denominator": 55
+        },
+        {
+          "label": "İçerik soruları (arama yolu)",
+          "value": 0.95,
+          "numerator": 19,
+          "denominator": 20
+        },
+        {
+          "label": "Reddedilmesi gerekenler",
+          "value": 0.96,
+          "numerator": 24,
+          "denominator": 25
+        }
       ],
-      "status": "unmeasured"
+      "notes": [
+        "Her sorunun cevap anahtarı kendisiyle geliyor: sayısal sorular aynı veritabanına karşı koşan bir referans sorguyla, erişim soruları bulunması gereken ihbar listesiyle, reddetme soruları da cevaplanmaması gerektiğiyle doğrulanıyor. Anahtar elle yazılmadığı için eskimiyor.",
+        "Sorular canlı veritabanının içeriğinden türetildi, korpustan değil — RAG korpusu değil veritabanını okuyor."
+      ],
+      "status": "pass"
     }
   ]
 }
