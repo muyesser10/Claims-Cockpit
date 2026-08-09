@@ -16,7 +16,7 @@ pair's work - CLAUDE.md §4 keeps migrations there.
 
 from pathlib import Path
 
-PROMPT_PATH = Path(__file__).resolve().parents[2] / "prompts" / "text_to_sql_v1.txt"
+PROMPT_PATH = Path(__file__).resolve().parents[2] / "prompts" / "text_to_sql_v2.txt"
 
 # Read once: the prompt is static and identical for every question.
 PROMPT_TEMPLATE = PROMPT_PATH.read_text(encoding="utf-8")

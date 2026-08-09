@@ -125,9 +125,15 @@ def test_sanity_disabled_skips_llm_call_but_still_writes_audit(db, monkeypatch):
     assert audit.detail["leak_found"] is False
 
 
-def test_sanity_leak_skips_extraction(db, monkeypatch):
-    """A flagged leak must stop extraction from running at all — no OpenAI
-    call over data the team just decided might still hold PII."""
+def test_sanity_leak_does_not_stop_extraction(db, monkeypatch):
+    """A flag is a suspicion, and a suspicion must not cost the claim its fields.
+
+    The sanity prompt's rule 4 asks the model to flag when unsure, so using the
+    flag as a hard gate blocked all 7 of the 7 messages in the 2026-08-08
+    rehearsal — every one a false positive. It also contained nothing: by this
+    point the same text has already gone to the sanity model and been written
+    to the claim.
+    """
     monkeypatch.setenv("MASKING_SANITY_ENABLED", "true")
     monkeypatch.setattr(
         pipeline_module,
@@ -136,26 +142,39 @@ def test_sanity_leak_skips_extraction(db, monkeypatch):
             leak_found=True, flags=[SanityFlag(kind="name", span=(0, 5))]
         ),
     )
-    extract_mock = MagicMock()
-    monkeypatch.setattr(pipeline_module, "extract", extract_mock)
+    monkeypatch.setattr(pipeline_module, "extract", lambda *a, **k: FAKE_EXTRACTION)
 
     msg = _make_raw_message(db)
     pipeline_module.process_message(db, msg.id)
 
-    extract_mock.assert_not_called()
-
     claim = db.execute(select(Claim).where(Claim.raw_message_id == msg.id)).scalar_one()
-    assert "extraction" not in claim.data
+    assert "extraction" in claim.data
     assert claim.data["masking_sanity_flags"] == [
         {"rule": "possible_pii_leak", "kind": "name", "span": [0, 5]}
     ]
 
-    audit = db.execute(
-        select(AuditTrail).where(
-            AuditTrail.claim_id == claim.id, AuditTrail.step == "extraction_skipped"
-        )
-    ).scalar_one()
-    assert audit.detail == {"reason": "masking_sanity_flag"}
+
+def test_sanity_leak_still_keeps_the_claim_away_from_auto_approval(db, monkeypatch):
+    """Where the flag keeps its teeth: a human, not the gate, judges it.
+
+    Removing the extraction gate must not turn the flag into decoration.
+    """
+    monkeypatch.setenv("MASKING_SANITY_ENABLED", "true")
+    monkeypatch.setenv("AUTO_APPROVE_ENABLED", "true")
+    monkeypatch.setattr(
+        pipeline_module,
+        "check_sanity",
+        lambda *a, **k: SanityCheckResult(
+            leak_found=True, flags=[SanityFlag(kind="name", span=(0, 5))]
+        ),
+    )
+    monkeypatch.setattr(pipeline_module, "extract", lambda *a, **k: FAKE_EXTRACTION)
+
+    msg = _make_raw_message(db)
+    pipeline_module.process_message(db, msg.id)
+
+    claim = db.execute(select(Claim).where(Claim.raw_message_id == msg.id)).scalar_one()
+    assert claim.status == "in_human_review"
 
 
 def test_sanity_leaked_text_never_persisted_to_db(db, monkeypatch):
@@ -174,7 +193,9 @@ def test_sanity_leaked_text_never_persisted_to_db(db, monkeypatch):
             leak_found=True, flags=[SanityFlag(kind="name", span=(0, 5))]
         ),
     )
-    monkeypatch.setattr(pipeline_module, "extract", MagicMock())
+    # A real result rather than a MagicMock: extraction now runs on a flagged
+    # claim, and its output is written to a json column.
+    monkeypatch.setattr(pipeline_module, "extract", lambda *a, **k: FAKE_EXTRACTION)
 
     msg = _make_raw_message(db, text=f"Karşı taraftaki sürücü {leaked_name}'di.")
     pipeline_module.process_message(db, msg.id)
@@ -204,15 +225,14 @@ def test_sanity_real_fail_closed_path_skips_extraction(db, monkeypatch):
     """End-to-end proof for the fix: run the REAL check_sanity() (not a
     mocked SanityCheckResult) through a client-construction failure — the
     exact failure mode a missing OPENAI_API_KEY produces in production — and
-    confirm the pipeline still routes to human review with extraction
-    skipped, instead of the pipeline crashing (old bug #1) or extraction
-    running anyway because flags came back empty (old bug #2).
+    confirm the pipeline still routes to human review, instead of crashing
+    (old bug #1) or treating the failure as a clean result because flags came
+    back empty (old bug #2).
     """
     monkeypatch.setenv("MASKING_SANITY_ENABLED", "true")
     monkeypatch.setattr(sanity_module, "LlmClient", _RaisingLlmClientClass)
     # pipeline_module.check_sanity is NOT mocked here — the real function runs.
-    extract_mock = MagicMock()
-    monkeypatch.setattr(pipeline_module, "extract", extract_mock)
+    monkeypatch.setattr(pipeline_module, "extract", lambda *a, **k: FAKE_EXTRACTION)
 
     msg = _make_raw_message(db)
     pipeline_module.process_message(db, msg.id)
@@ -220,20 +240,10 @@ def test_sanity_real_fail_closed_path_skips_extraction(db, monkeypatch):
     # The message must not have crashed the pipeline into dead_letter.
     assert msg.status != "dead_letter"
 
-    extract_mock.assert_not_called()
-
     claim = db.execute(select(Claim).where(Claim.raw_message_id == msg.id)).scalar_one()
     assert claim.status == "in_human_review"
-    assert "extraction" not in claim.data
     assert claim.data["masking_sanity_flags"] != []
     assert claim.data["masking_sanity_flags"][0]["kind"] == "other"
-
-    audit = db.execute(
-        select(AuditTrail).where(
-            AuditTrail.claim_id == claim.id, AuditTrail.step == "extraction_skipped"
-        )
-    ).scalar_one()
-    assert audit.detail == {"reason": "masking_sanity_flag"}
 
 
 def test_sanity_clean_result_extraction_runs_normally(db, monkeypatch):
@@ -291,8 +301,13 @@ def test_embedding_writes_vector_and_audit(db, monkeypatch):
     assert audit.duration_ms is not None
 
 
-def test_sanity_leak_skips_embedding(db, monkeypatch):
-    """Same rule as extraction: flagged PII must not reach the encoder either."""
+def test_sanity_leak_does_not_skip_embedding(db, monkeypatch):
+    """Same rule as extraction, and the encoder gives it a second reason.
+
+    store_embedding writes a vector and no text, and the encoder is local
+    (ADR-002), so nothing flagged leaves the machine. Skipping only made the
+    claim unfindable — including by the operator looking into the flag.
+    """
     monkeypatch.setenv("MASKING_SANITY_ENABLED", "true")
     monkeypatch.setattr(
         pipeline_module,
@@ -307,15 +322,7 @@ def test_sanity_leak_skips_embedding(db, monkeypatch):
     msg = _make_raw_message(db)
     pipeline_module.process_message(db, msg.id)
 
-    embed_mock.assert_not_called()
-
-    claim = db.execute(select(Claim).where(Claim.raw_message_id == msg.id)).scalar_one()
-    audit = db.execute(
-        select(AuditTrail).where(
-            AuditTrail.claim_id == claim.id, AuditTrail.step == "embedding_skipped"
-        )
-    ).scalar_one()
-    assert audit.detail == {"reason": "masking_sanity_flag"}
+    embed_mock.assert_called_once()
 
 
 def test_embedding_failure_does_not_dead_letter_the_message(db, monkeypatch):

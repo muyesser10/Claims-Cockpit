@@ -10,7 +10,7 @@ from prometheus_fastapi_instrumentator import Instrumentator
 from api.database import SessionLocal
 from api.demo import is_demo_offline
 from api.metrics import refresh_queue_metrics
-from api.routers import auth, claims, ingest, question, queue, stats
+from api.routers import auth, claims, ingest, quality, question, queue, stats
 
 logger = logging.getLogger("api.main")
 
@@ -66,6 +66,7 @@ app.include_router(ingest.router)
 app.include_router(claims.router)
 app.include_router(queue.router)
 app.include_router(stats.router)
+app.include_router(quality.router)
 # /soru is a proxy, not an implementation — the answer is produced by the rag
 # service (ADR-003).
 app.include_router(question.router)

@@ -12,25 +12,59 @@ import pytest
 from worker.shared.injury_terms import INJURY_TERMS, _normalize_tr, find_injury_signals
 
 
-def test_injury_terms_has_twelve_terms():
-    assert len(INJURY_TERMS) == 12
-
-
 def test_injury_terms_contains_expected_words():
     assert set(INJURY_TERMS) == {
         "yaralı",
         "yaralanma",
-        "kan",
+        "yaralandı",
+        "yaralanan",
+        "kanama",
+        "kanıyor",
+        "kan kayb",
         "hastane",
         "ambulans",
-        "yaralandı",
         "ölü",
         "ölüm",
         "sedye",
         "kırık",
-        "bilinç",
+        "bilinç kayb",
+        "bilinci kapalı",
+        "bilinçsiz",
         "acil servis",
     }
+
+
+def test_a_term_that_is_only_the_first_syllable_of_another_word_does_not_signal():
+    """The three false positives the 2026-08-09 revision removed.
+
+    A bare "kan" matched "kanal", "kanaat" and "kanatlı"; a bare "bilinç"
+    matched "bilinçli olarak", which is about doing something deliberately.
+    Both were replaced by forms that assert the thing rather than spelling its
+    first syllable.
+    """
+    assert find_injury_signals("Kanal kenarında park halindeydi.") == []
+    assert find_injury_signals("Kanaat getirdim, kanatlı bir şey çarptı.") == []
+    assert find_injury_signals("Bilinçli olarak yavaşladım.") == []
+
+
+def test_a_question_about_injuries_is_not_a_report_of_one():
+    """Call transcripts open with the agent asking. The word is there; the
+    injury is not - and the customer's answer in the same corpus is a denial."""
+    text = "Ajan: Aracınızda yaralanan var mı?\nMüşteri: Çok şükür yaralanan olmadı."
+
+    assert find_injury_signals(text) == []
+
+
+def test_an_injury_typed_without_turkish_letters_still_signals():
+    """People type from keyboards that do not have ı, ğ or ç."""
+    assert find_injury_signals("Kolumda kirik var, cok agri yapiyor.")
+    assert find_injury_signals("Kazada yarali var, hemen donus yapin.")
+
+
+def test_death_is_not_matched_through_ascii_folding():
+    """The deliberate exception. "ölü" folds to "olu", which starts 321 words in
+    the corpus that have nothing to do with death - "oluştu", "olursanız"."""
+    assert find_injury_signals("Kaza boyle olustu, hasar buyuk.") == []
 
 
 def test_normalize_tr_uppercase_dotless_i():

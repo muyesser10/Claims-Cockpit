@@ -58,6 +58,70 @@ class StatsOut(BaseModel):
     last_claim_at: datetime | None
 
 
+# --- Kalite metrikleri (Metrikler ekranı) ---------------------------------
+# Şekil eval/report.py'nin ürettiği quality_report.json ile birebir. Oradaki
+# dataclass'lar tek doğruluk kaynağı; buradakiler onun API karşılığı.
+
+
+class QualitySample(BaseModel):
+    """Metriğin neyin üzerinden ölçüldüğü. Ölçülmemiş metrikte `n` null."""
+
+    n: int | None
+    unit: str
+    description: str
+
+
+class QualitySource(BaseModel):
+    """Sayının nereden geldiği — ekranda künye olarak gösterilir."""
+
+    run: str
+    measured_at: str | None
+    model: str | None = None
+
+
+class QualityBreakdown(BaseModel):
+    """Manşet sayının bir bileşeni (kanal, sınıf ya da maskeleme katmanı)."""
+
+    label: str
+    value: float | None
+    numerator: int | None = None
+    denominator: int | None = None
+
+
+class QualityMetric(BaseModel):
+    """§7 tablosunun bir satırı."""
+
+    key: str
+    label: str
+    value: float | None
+    unit: str  # "ratio" | "seconds"
+    target: float
+    target_operator: str  # "gte" | "lte"
+    status: str  # "pass" | "fail" | "unmeasured"
+    sample: QualitySample
+    source: QualitySource | None = None
+    numerator: int | None = None
+    denominator: int | None = None
+    breakdown: list[QualityBreakdown] = []
+    notes: list[str] = []
+
+
+class QualitySummary(BaseModel):
+    """Kaç metrik tuttu, kaçı tutmadı, kaçı hiç ölçülmedi."""
+
+    total: int
+    passed: int
+    failed: int
+    unmeasured: int
+
+
+class QualityReportOut(BaseModel):
+    schema_version: int
+    generated_at: str
+    summary: QualitySummary
+    metrics: list[QualityMetric]
+
+
 class LoginRequest(BaseModel):
     email: str
     password: str

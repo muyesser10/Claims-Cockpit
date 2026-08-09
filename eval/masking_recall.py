@@ -24,6 +24,7 @@ Free and offline: no model, no database, no API key.
 
     python -m eval.masking_recall
     python -m eval.masking_recall --pinned    # the baseline 100 only
+    python -m eval.masking_recall --out eval/results/masking_recall.json
 """
 
 import argparse
@@ -121,6 +122,64 @@ def measure(gt_ids: set[str] | None = None) -> tuple[dict[str, Tally], int]:
     return dict(tallies), scanned
 
 
+# The four rows §7 has to be read against, and the kinds each one sums. Defined
+# once because both the printed report and the JSON summary report them: two
+# copies of this grouping would drift, and the screen would then disagree with
+# the terminal about what "masking recall" means.
+GROUP_LABELS = {
+    "regex": "regex PII (tc/phone/plate)",
+    "names_faker": "names, faker (circular - dictionary's own source)",
+    "names_holdout": "names, holdout (unseen - the honest number)",
+    "deterministic": "everything, deterministic layer",
+}
+
+
+def group_kinds(tallies: dict[str, Tally]) -> dict[str, list[str]]:
+    """Which PII kinds belong to each reported group."""
+    regex_kinds = [k for k in ("tc", "phone", "plate") if k in tallies]
+    name_kinds = sorted(k for k in tallies if k.startswith("name_"))
+    return {
+        "regex": regex_kinds,
+        "names_faker": [k for k in name_kinds if "[faker]" in k],
+        "names_holdout": [k for k in name_kinds if "[holdout]" in k],
+        "deterministic": regex_kinds + name_kinds,
+    }
+
+
+def combine(tallies: dict[str, Tally], kinds: list[str]) -> tuple[int, int]:
+    """(masked, present) summed over several kinds."""
+    return (
+        sum(tallies[k].masked for k in kinds),
+        sum(tallies[k].present for k in kinds),
+    )
+
+
+def summary(tallies: dict[str, Tally], scanned: int) -> dict:
+    """The same numbers format_report prints, for a machine to read.
+
+    Written for eval/report.py, which puts masking recall on the Metrikler
+    screen beside the seven other §7 metrics.
+    """
+    groups = group_kinds(tallies)
+    return {
+        "records_scanned": scanned,
+        "groups": {
+            name: {
+                "label": GROUP_LABELS[name],
+                "masked": masked,
+                "present": present,
+                "recall": masked / present if present else None,
+            }
+            for name, kinds in groups.items()
+            for masked, present in [combine(tallies, kinds)]
+        },
+        "kinds": {
+            kind: {"masked": tally.masked, "present": tally.present, "recall": tally.recall}
+            for kind, tally in sorted(tallies.items())
+        },
+    }
+
+
 def format_report(tallies: dict[str, Tally], scanned: int) -> str:
     lines = [f"records scanned: {scanned}", ""]
     lines.append(f"  {'pii kind':<24} {'masked':>12}   recall")
@@ -130,7 +189,8 @@ def format_report(tallies: dict[str, Tally], scanned: int) -> str:
         rate = "     -" if t.recall is None else f"{t.recall:6.1%}"
         return f"  {kind:<24} {t.masked:>5}/{t.present:<6} {rate}"
 
-    regex_kinds = [k for k in ("tc", "phone", "plate") if k in tallies]
+    groups = group_kinds(tallies)
+    regex_kinds = groups["regex"]
     name_kinds = sorted(k for k in tallies if k.startswith("name_"))
 
     lines.append("  -- regex layer " + "-" * 32)
@@ -142,26 +202,12 @@ def format_report(tallies: dict[str, Tally], scanned: int) -> str:
 
     # The two numbers §7 has to be read against: the deterministic layer overall,
     # and the same layer on names it has never seen.
-    def combine(kinds: list[str]) -> tuple[int, int]:
-        return (
-            sum(tallies[k].masked for k in kinds),
-            sum(tallies[k].present for k in kinds),
-        )
-
-    holdout = [k for k in name_kinds if "[holdout]" in k]
-    faker = [k for k in name_kinds if "[faker]" in k]
-
     lines.append("")
     lines.append("=" * 60)
-    for label, kinds in (
-        ("regex PII (tc/phone/plate)", regex_kinds),
-        ("names, faker (circular - dictionary's own source)", faker),
-        ("names, holdout (unseen - the honest number)", holdout),
-        ("everything, deterministic layer", regex_kinds + name_kinds),
-    ):
-        masked, present = combine(kinds)
+    for name, kinds in groups.items():
+        masked, present = combine(tallies, kinds)
         rate = f"{masked / present:6.1%}" if present else "     -"
-        lines.append(f"  {label:<50} {masked:>5}/{present:<6} {rate}")
+        lines.append(f"  {GROUP_LABELS[name]:<50} {masked:>5}/{present:<6} {rate}")
 
     leaks = [(k, t) for k, t in sorted(tallies.items()) if t.leaked]
     if leaks:
@@ -180,6 +226,7 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="only the pinned baseline sample, for comparability with the other runs",
     )
+    parser.add_argument("--out", type=Path, default=None, help="also write the summary as JSON")
     args = parser.parse_args(argv)
 
     gt_ids = None
@@ -188,6 +235,12 @@ def main(argv: list[str] | None = None) -> int:
 
     tallies, scanned = measure(gt_ids)
     print(format_report(tallies, scanned))
+
+    if args.out is not None:
+        payload = {"pinned": args.pinned, **summary(tallies, scanned)}
+        args.out.parent.mkdir(parents=True, exist_ok=True)
+        args.out.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        print(f"\nsummary written to {args.out}")
     return 0
 
 
