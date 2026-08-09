@@ -1,0 +1,297 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-08-09T07:07:05.212774+00:00",
+  "summary": {
+    "total": 8,
+    "pass": 5,
+    "fail": 2,
+    "unmeasured": 1
+  },
+  "metrics": [
+    {
+      "key": "field_accuracy",
+      "label": "Zorunlu alan doğruluğu",
+      "value": 0.99375,
+      "unit": "ratio",
+      "target": 0.82,
+      "target_operator": "gte",
+      "sample": {
+        "n": 100,
+        "unit": "ihbar",
+        "description": "sabitlenmiş baseline örneklemi"
+      },
+      "source": {
+        "run": "run_masked_baseline.json",
+        "measured_at": "2026-08-08",
+        "model": "gpt-4o-mini"
+      },
+      "numerator": 795,
+      "denominator": 800,
+      "breakdown": [
+        {
+          "label": "Çağrı transkripti",
+          "value": 1.0,
+          "numerator": 240,
+          "denominator": 240
+        },
+        {
+          "label": "E-posta",
+          "value": 0.995,
+          "numerator": 398,
+          "denominator": 400
+        },
+        {
+          "label": "Web formu",
+          "value": 0.98125,
+          "numerator": 157,
+          "denominator": 160
+        }
+      ],
+      "notes": [
+        "Gürültü tabanı ±%0,50 — iki özdeş koşu arasında bu kadar alan oynadı. Tek tekrarla ölçüldü, yani taban; sınır değil."
+      ],
+      "status": "pass"
+    },
+    {
+      "key": "hallucination_rate",
+      "label": "Halüsinasyon oranı",
+      "value": 0.042997542997543,
+      "unit": "ratio",
+      "target": 0.07,
+      "target_operator": "lte",
+      "sample": {
+        "n": 100,
+        "unit": "ihbar",
+        "description": "sabitlenmiş baseline örneklemi"
+      },
+      "source": {
+        "run": "run_masked_baseline.json",
+        "measured_at": "2026-08-08",
+        "model": "gpt-4o-mini"
+      },
+      "numerator": 35,
+      "denominator": 814,
+      "breakdown": [],
+      "notes": [
+        "Modelin doldurduğu alanlardan, verdiği kaynak alıntısı ham metinde bulunamayanların oranı."
+      ],
+      "status": "pass"
+    },
+    {
+      "key": "classification_f1",
+      "label": "Sınıflandırma macro-F1 (aciliyet)",
+      "value": 0.9635736244431897,
+      "unit": "ratio",
+      "target": 0.85,
+      "target_operator": "gte",
+      "sample": {
+        "n": 100,
+        "unit": "ihbar",
+        "description": "sabitlenmiş baseline örneklemi"
+      },
+      "source": {
+        "run": "gate_post62.json",
+        "measured_at": "2026-08-09",
+        "model": "gpt-4o-mini"
+      },
+      "numerator": null,
+      "denominator": null,
+      "breakdown": [
+        {
+          "label": "Kritik",
+          "value": 0.9523809523809523,
+          "numerator": 10,
+          "denominator": 10
+        },
+        {
+          "label": "Yüksek",
+          "value": 0.9565217391304348,
+          "numerator": 33,
+          "denominator": 34
+        },
+        {
+          "label": "Normal",
+          "value": 0.9818181818181818,
+          "numerator": 54,
+          "denominator": 56
+        }
+      ],
+      "notes": [
+        "Aciliyet alanı üzerinden. Sınıf başına eşit ağırlıklı ortalama, yani az örnekli kritik sınıfı çoğunluk gizlemiyor."
+      ],
+      "status": "pass"
+    },
+    {
+      "key": "auto_approve_precision",
+      "label": "Otomatik onay precision",
+      "value": 0.9714285714285714,
+      "unit": "ratio",
+      "target": 0.95,
+      "target_operator": "gte",
+      "sample": {
+        "n": 100,
+        "unit": "ihbar",
+        "description": "sabitlenmiş baseline örneklemi"
+      },
+      "source": {
+        "run": "gate_post62.json",
+        "measured_at": "2026-08-09",
+        "model": "gpt-4o-mini"
+      },
+      "numerator": 68,
+      "denominator": 70,
+      "breakdown": [],
+      "notes": [
+        "Kapsam %70,0 — 70/100 ihbar kapıdan geçti.",
+        "Tek taraflı %95 güven alt sınırı %91,3. Örneklem bu genişlikte olduğu sürece hedefin sağlandığı istatistiksel olarak gösterilemez, sadece ölçülür.",
+        "Yanlış onaylananlar: GT-000094, GT-000325. Bunlardan counterparty_exists kaynaklı olanlar bilinen ground truth kusurudur (data/gt_generator.py etiketi metinden türetmiyor), gerçek model hatası değildir."
+      ],
+      "status": "pass"
+    },
+    {
+      "key": "critical_recall",
+      "label": "Kritik aciliyet recall",
+      "value": 0.7368421052631579,
+      "unit": "ratio",
+      "target": 0.97,
+      "target_operator": "gte",
+      "sample": {
+        "n": 19,
+        "unit": "ifade",
+        "description": "korpusta bulunmayan yaralanma ifadeleri (elle yazılmış fixture)"
+      },
+      "source": {
+        "run": "injury_recall.json",
+        "measured_at": "2026-08-07",
+        "model": null
+      },
+      "numerator": 14,
+      "denominator": 19,
+      "breakdown": [
+        {
+          "label": "korpus kalıbı (kanonik ifadeler)",
+          "value": 1.0,
+          "numerator": 38,
+          "denominator": 38
+        },
+        {
+          "label": "deterministik katman, kanonik olmayan",
+          "value": 0.0,
+          "numerator": 0,
+          "denominator": 19
+        },
+        {
+          "label": "pipeline, Türkçe karakteri düşmüş ifadeler",
+          "value": 0.8,
+          "numerator": 4,
+          "denominator": 5
+        },
+        {
+          "label": "pipeline, kanonik olmayan ifadeler",
+          "value": 0.7142857142857143,
+          "numerator": 10,
+          "denominator": 14
+        }
+      ],
+      "notes": [
+        "Manşet sayı korpusun değil, fixture'ın sayısıdır. Korpus üzerinden ölçüldüğünde bu metrik %100 verir; ama oradaki kritik kayıtların hepsi dört sabit cümleden birini taşıyor ve dördü de kanonik bir yaralanma terimi içeriyor — yani o %100 kalıbı ölçüyor, sistemin erişimini değil.",
+        "Deterministik katman bu ifadelerin 0/19 tanesini yakalıyor; geri kalanı LLM taşıyor. Sağlayıcı fallback'i olmadığı sürece bu metrik tek bir servise bağlı.",
+        "Yaralanma içermeyen 15 kontrol ifadesinin 9 tanesi yanlışlıkla kritik işaretleniyor — recall'ın karşı tarafı."
+      ],
+      "status": "fail"
+    },
+    {
+      "key": "masking_recall",
+      "label": "Maskeleme recall",
+      "value": 0.8222222222222222,
+      "unit": "ratio",
+      "target": 0.97,
+      "target_operator": "gte",
+      "sample": {
+        "n": 1000,
+        "unit": "metin",
+        "description": "tüm korpus"
+      },
+      "source": {
+        "run": "masking_recall.json",
+        "measured_at": "2026-08-09",
+        "model": null
+      },
+      "numerator": 3145,
+      "denominator": 3825,
+      "breakdown": [
+        {
+          "label": "Regex katmanı (TC / telefon / plaka)",
+          "value": 0.9994585814834868,
+          "numerator": 1846,
+          "denominator": 1847
+        },
+        {
+          "label": "İsimler — sözlüğün kendi kaynağından (dairesel ölçüm)",
+          "value": 0.9984301412872841,
+          "numerator": 1272,
+          "denominator": 1274
+        },
+        {
+          "label": "İsimler — sözlük dışı (dürüst sayı)",
+          "value": 0.03835227272727273,
+          "numerator": 27,
+          "denominator": 704
+        }
+      ],
+      "notes": [
+        "§7'nin kapsamı deterministik katman (regex + sözlük). LLM sanity taraması ayrı bir katman ve ayrı bir soru.",
+        "Sözlükte bulunmayan isimlerde recall %3,8 (27/704). Faker isimlerindeki yüksek sayı dairesel: sözlük korpusun isim havuzunun kendisinden üretilmiş."
+      ],
+      "status": "fail"
+    },
+    {
+      "key": "p95_latency",
+      "label": "p95 uçtan uca gecikme",
+      "value": 10.95,
+      "unit": "seconds",
+      "target": 60.0,
+      "target_operator": "lte",
+      "sample": {
+        "n": 43,
+        "unit": "ihbar",
+        "description": "pipeline'dan geçmiş ihbarlar (denetim izi olan tüm kayıtlar)"
+      },
+      "source": {
+        "run": "audit_trail",
+        "measured_at": "2026-08-09",
+        "model": null
+      },
+      "numerator": null,
+      "denominator": null,
+      "breakdown": [],
+      "notes": [
+        "Diğer metriklerden farklı olarak bir eval koşusundan değil, veritabanındaki denetim izinden elle alındı — kaynağı eval/reports/manual_inputs.json.",
+        "Mesaj başına adım sürelerinin toplamı üzerinden; medyan 4,92 sn.",
+        "Kapsam, denetim izi bulunan kayıtlar. Veritabanındaki ilk 57 ihbar seed betiğiyle doğrudan yazıldığı için pipeline'dan hiç geçmemiştir ve bu ölçümün dışındadır."
+      ],
+      "status": "pass"
+    },
+    {
+      "key": "rag_accuracy",
+      "label": "RAG doğruluğu",
+      "value": null,
+      "unit": "ratio",
+      "target": 0.65,
+      "target_operator": "gte",
+      "sample": {
+        "n": null,
+        "unit": "soru",
+        "description": ""
+      },
+      "source": null,
+      "numerator": null,
+      "denominator": null,
+      "breakdown": [],
+      "notes": [
+        "Henüz ölçülmedi: değerlendirme seti yok. Tabloda boş bırakılıyor, gizlenmiyor — ölçülmemiş bir metrik, tutmuş bir metrikten farklıdır."
+      ],
+      "status": "unmeasured"
+    }
+  ]
+}
