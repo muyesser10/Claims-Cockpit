@@ -281,7 +281,7 @@ def test_the_summary_counts_add_up_to_the_rows_it_summarises(tmp_path: Path):
     payload = build(**_write_inputs(tmp_path))
     summary = payload["summary"]
 
-    assert summary["pass"] + summary["fail"] + summary["unmeasured"] == summary["total"]
+    assert summary["passed"] + summary["failed"] + summary["unmeasured"] == summary["total"]
     assert summary["total"] == len(payload["metrics"])
 
 

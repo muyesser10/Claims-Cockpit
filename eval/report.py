@@ -498,9 +498,13 @@ def build(
         rag_metric(),
     ]
 
-    counts: dict[str, int] = {"pass": 0, "fail": 0, "unmeasured": 0}
+    # Keyed by status, but spelled out: "pass" is a Python keyword and this
+    # summary crosses into a Pydantic model on the API side, where a field
+    # called `pass` would need an alias to exist at all.
+    summary_keys = {"pass": "passed", "fail": "failed", "unmeasured": "unmeasured"}
+    counts: dict[str, int] = {name: 0 for name in summary_keys.values()}
     for row in rows:
-        counts[row.status] += 1
+        counts[summary_keys[row.status]] += 1
 
     return {
         "schema_version": SCHEMA_VERSION,
@@ -515,7 +519,7 @@ def format_report(payload: dict) -> str:
     summary = payload["summary"]
     lines = [
         f"generated {payload['generated_at'][:19]}",
-        f"  {summary['pass']} pass, {summary['fail']} fail, "
+        f"  {summary['passed']} pass, {summary['failed']} fail, "
         f"{summary['unmeasured']} unmeasured of {summary['total']}",
         "",
         f"  {'metric':<34} {'value':>10}  {'target':>9}  status   source",

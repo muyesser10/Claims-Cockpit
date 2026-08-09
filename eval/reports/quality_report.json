@@ -1,10 +1,10 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-08-09T07:07:05.212774+00:00",
+  "generated_at": "2026-08-09T07:08:34.844620+00:00",
   "summary": {
     "total": 8,
-    "pass": 5,
-    "fail": 2,
+    "passed": 5,
+    "failed": 2,
     "unmeasured": 1
   },
   "metrics": [

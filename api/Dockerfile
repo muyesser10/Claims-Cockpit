@@ -16,6 +16,11 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     pip install -r requirements.txt
 
 COPY api /app/api
+# The §7 quality table the Metrikler screen reads. Produced by
+# eval/report.py and committed; api/routers/quality.py serves it. Only
+# eval/reports/ is copied - the eval package itself pulls the scientific
+# stack this image deliberately does not install.
+COPY eval/reports /app/eval/reports
 COPY migrations /app/migrations
 COPY alembic.ini /app/alembic.ini
 COPY scripts /app/scripts
