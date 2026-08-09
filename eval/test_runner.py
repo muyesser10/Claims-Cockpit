@@ -59,6 +59,69 @@ def records(count=3):
     ]
 
 
+MASKED_ANSWER = ClaimExtraction(
+    reasoning="Plaka yer tutucudan geldi.",
+    policy_no="POL-2020-57052",
+    plate="[PLATE_1]",
+    damage_type="animal",
+    source_references={"plate": "[PLATE_1] plakalı"},
+)
+
+
+class PlaceholderClient(StubClient):
+    """Answers with the placeholder, the way a model reading masked text does."""
+
+    def structured(self, **kwargs):
+        self.calls.append(kwargs)
+        return MASKED_ANSWER
+
+
+# --- masking parity with the pipeline ------------------------------------
+
+
+def test_the_model_sees_masked_text_by_default():
+    """Production extracts from masked_text. A run on the raw text measures a
+    system nobody runs - the model reading a real plate where the pipeline
+    would have shown it [PLATE_1]."""
+    client = StubClient()
+
+    run_live(records(1), client=client)
+
+    sent = client.calls[0]["user_content"]
+    assert "[PLATE_1]" in sent
+    assert "45 GAK 2046" not in sent
+
+
+def test_placeholders_are_resolved_before_scoring():
+    """The answer key holds real values, so a placeholder answer has to be
+    unmasked first - the same step the pipeline takes before it stores the
+    extraction. Without it every masked field would score as a miss."""
+    client = PlaceholderClient()
+
+    outcome = run_live(records(1), client=client)
+
+    score = outcome.scores[0]
+    assert score.fields["plate"].llm == "45 GAK 2046"
+    assert score.fields["plate"].hit is True
+
+
+def test_masking_can_be_turned_off_for_a_comparison():
+    """The other half of the measurement: what masking costs extraction
+    accuracy is a number worth having on purpose."""
+    client = StubClient()
+
+    outcome = run_live(records(1), client=client, mask=False)
+
+    assert "45 GAK 2046" in client.calls[0]["user_content"]
+    assert outcome.masked is False
+
+
+def test_whether_the_run_was_masked_travels_with_the_numbers(tmp_path):
+    path = write_results(run_live(records(1), client=StubClient()), tmp_path / "run.json")
+
+    assert read_results_meta(path)["masked"] is True
+
+
 def test_every_record_is_scored_with_a_single_shared_client():
     """One client for the whole run; a fresh one per record would be waste."""
     client = StubClient()
