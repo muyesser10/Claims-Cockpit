@@ -229,11 +229,26 @@ def step_route(
 
 
 def step_extract(db: Session, msg: RawMessage, claim: Claim, masked_text: str) -> None:
-    if claim.data.get("masking_sanity_flags"):
-        log_audit(
-            db, "extraction_skipped", claim_id=claim.id, detail={"reason": "masking_sanity_flag"}
-        )
-        return
+    # A masking sanity flag does not stop extraction, though it used to.
+    #
+    # prompts/masking_sanity_v1.txt rule 4 tells the model to flag on suspicion
+    # ("yanlış pozitif vermek, kaçırmaktan daha güvenlidir"). A layer built to
+    # over-report cannot also be a hard gate, and as one it blocked all 7 of the
+    # 7 messages in the 2026-08-08 rehearsal - every one of them a false
+    # positive, on text where the placeholders were plainly there. Extraction
+    # was dead for the whole run, which is why MASKING_SANITY_ENABLED had to be
+    # switched off to demo at all.
+    #
+    # Nor did the gate contain anything. By the time a flag exists the sanity
+    # pass has already sent this exact text to the model, and step_route has
+    # already written it to the claim, where the Kuyruk detail panel shows it to
+    # any operator. Skipping extraction removed the claim's fields; it did not
+    # remove the leak.
+    #
+    # The flag still has teeth in the one place a suspicion belongs: it blocks
+    # auto-approval (worker/routing/auto_approve.py, REASON_SANITY_FLAG), so a
+    # flagged claim reaches a human with its fields filled in - which is what
+    # someone judging whether the text really leaked needs to see.
 
     # Design doc §4's early exit: only claims go on to extraction. A question
     # about a policy has no plate or incident date to pull out, and asking for
@@ -375,15 +390,14 @@ def step_embed(db: Session, msg: RawMessage, claim: Claim, masked_text: str) -> 
     extraction failed is still a claim an operator may ask about, and tying the
     two together would make every extraction failure a silent hole in search.
 
-    Skipped when masking sanity flagged leaked PII, matching step_extract's rule
-    above: one decision, applied the same way in both places.
+    A masking sanity flag no longer skips this, matching step_extract: one
+    decision, applied the same way in both places. The reasoning is there in
+    full; the part specific to embedding is that store_embedding writes a vector
+    and nothing else - the text is not persisted here, and the encoder is local
+    (ADR-002), so no flagged text leaves the machine. What skipping did buy was
+    a claim missing from every search, including the searches an operator would
+    run precisely because it was flagged.
     """
-    if claim.data.get("masking_sanity_flags"):
-        log_audit(
-            db, "embedding_skipped", claim_id=claim.id, detail={"reason": "masking_sanity_flag"}
-        )
-        return
-
     try:
         result = store_embedding(db, claim.id, masked_text)
         log_audit(
