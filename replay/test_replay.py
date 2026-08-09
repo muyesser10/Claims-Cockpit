@@ -1,11 +1,8 @@
 """Tests for the replay script."""
 
 import json
-import sys
-from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent))
-from replay import (  # noqa: E402
+from replay.replay import (
     load_received_map,
     load_scenario,
     match_filter,
