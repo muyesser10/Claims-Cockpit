@@ -21,9 +21,21 @@ function formatValue(value: number | null, unit: string): string {
   return unit === "seconds" ? `${seconds.format(value)} sn` : percent.format(value);
 }
 
+// Hedefler §7'de yuvarlak sayılar (%82, %97, 60 sn). Ölçümle aynı biçimlendiriciden
+// geçirilince "≥ %82,0" ya da "≤ 60,00 sn" oluyor — var olmayan bir hassasiyet.
+const targetPercent = new Intl.NumberFormat("tr-TR", {
+  style: "percent",
+  maximumFractionDigits: 1,
+});
+const targetSeconds = new Intl.NumberFormat("tr-TR", { maximumFractionDigits: 1 });
+
 function formatTarget(metric: QualityMetric): string {
   const sign = metric.target_operator === "gte" ? "≥" : "≤";
-  return `${sign} ${formatValue(metric.target, metric.unit)}`;
+  const value =
+    metric.unit === "seconds"
+      ? `${targetSeconds.format(metric.target)} sn`
+      : targetPercent.format(metric.target);
+  return `${sign} ${value}`;
 }
 
 const STATUS_STYLES: Record<QualityStatus, { label: string; className: string }> = {
