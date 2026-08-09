@@ -205,5 +205,196 @@ docker compose exec worker env | grep DEMO_OFFLINE
 ```
 
 ## Backup and restore
+
+### Neden `pg_dump`, neden özel format
+
+`claim_embeddings.embedding` kolonu `vector(384)` — pgvector'e özgü bir tip.
+Standart `pg_dump` bunu sorunsuz taşır (extension hedef DB'de kuruluysa,
+bu repo'nun `pgvector/pgvector:pg16` image'ı zaten içeriyor), ekstra bir
+bayrak gerekmiyor. Custom format (`-F c`) seçildi çünkü `pg_restore` ile
+seçici geri yükleme (tek tablo, sadece şema) yapılabiliyor — düz SQL
+dump'ın aksine.
+
+### Backup
+
+```bash
+docker compose exec db pg_dump -U claims -d claims_cockpit -F c -f /tmp/backup.dump
+docker compose cp db:/tmp/backup.dump ./backup_$(date +%Y%m%d_%H%M%S).dump
+docker compose exec db rm /tmp/backup.dump   # container içinde bırakma
+```
+
+### Restore
+
+```bash
+docker compose cp ./backup_YYYYMMDD_HHMMSS.dump db:/tmp/restore.dump
+docker compose exec db pg_restore -U claims -d claims_cockpit --clean --if-exists /tmp/restore.dump
+docker compose exec db rm /tmp/restore.dump
+```
+
+`--clean --if-exists`: hedef DB'de var olan nesneleri önce düşürür. Bunsuz,
+dolu bir DB'ye restore "already exists" hatalarıyla yarım kalır.
+
+### `rag_readonly` rolü restore sonrası
+
+Rol `migrations/init/`'teki bir init script'iyle geliyor, **restore bunu
+kapsamaz** — `pg_dump`, rolleri değil verileri yedekler. Restore sonrası
+Setup bölümündeki `01-create-readonly-role.sh` adımını tekrar çalıştırın,
+idempotent olduğu için zarar vermez:
+
+```bash
+docker compose exec db bash /docker-entrypoint-initdb.d/01-create-readonly-role.sh
+```
+
+### Ne yedeklenmiyor
+
+`hf_cache` named volume'ü (embedding modeli, ~471 MB) bu prosedürün dışında
+— o bir model dosyası, kurtarılacak veri değil, restore sonrası ilk
+başlangıçta zaten yeniden iner (bkz. Setup → "Sıfırdan kurulum").
+
+**Ölçüldü (2026-08-09, 8 claim'lik yerel geliştirme DB'si):** backup 0,66 sn,
+restore 0,61 sn, dump dosyası 18,3 KB. Doğrulama: restore öncesi/sonrası
+`claims` kayıt sayısı birebir eşleşti (8=8). **Not:** bu rakamlar küçük bir
+geliştirme veritabanına ait — demo/production ölçeğinde (yüzlerce/binlerce
+kayıt, embedding vektörleri dahil) süre ve boyut orantılı büyür, ama prosedür
+aynı kalır.
+
 ## Model rotation
+
+### LLM model/sağlayıcı değişimi (ADR-001)
+
+Modeller `.env`'de, kod değişikliği gerektirmez:
+
+```bash
+LLM_MODEL_CHEAP=gpt-4o-mini    # classification, triage, RAG routing
+LLM_MODEL_STRONG=gpt-4o        # extraction, Text-to-SQL, RAG answers
+```
+
+Değiştirdikten sonra:
+
+```bash
+docker compose up -d --build worker rag   # ikisi de LLM client'ı içeriyor (ADR-003)
+```
+
+**Zorunlu sonraki adım:** `eval/report.py`'nin ürettiği Metrikler tablosu
+(§7) **eski modelin** ölçümüdür — model değişince bu tablo yanlışı doğru
+gösterir. Yeniden ölçüp raporu yeniden üretin:
+
+```bash
+python -m eval --run --seed 42
+python -m eval.report
+```
+
+ve yeni `eval/reports/quality_report.json`'ı commit'leyip `api`'yi yeniden
+build edin (Metrikler ekranının okuduğu dosya budur, `api/Dockerfile`
+sadece bu dosyayı kopyalıyor — bkz. `api/routers/quality.py`).
+
+### Embedding modeli değişimi (ADR-002)
+
+Bu, LLM model değişiminden **çok daha ağır**: mevcut `claim_embeddings`
+satırlarının tamamı eski modelin vektör uzayında, yeni modelle
+karşılaştırılamaz — yarım geçiş, retrieval'i sessizce bozar.
+
+1. `worker/embedding/encoder.py`'de model adını değiştirin
+2. Yeni model farklı boyut üretiyorsa (`intfloat/multilingual-e5-small`
+   384 boyutlu; başka bir model farklı olabilir) `EMBED_DIM` **ve**
+   migration'daki `VECTOR(384)` güncellenmeli — kolon boyutu sabit
+   kodlanmış, tip uyuşmazlığında INSERT hatası alırsınız
+3. Tüm embedding'leri yeniden üretin:
+```bash
+   docker compose exec worker python -m scripts.backfill_embeddings --force
+```
+4. RAG accuracy'yi yeniden ölçün (Metrikler ekranındaki `sql`/`retrieval`/
+   `refusal` kırılımı bunun için var — retrieval kategorisi doğrudan
+   embedding kalitesinin göstergesi)
+
+### Fallback sağlayıcı (Groq/Gemini/Ollama) — henüz yok
+
+`.env.example`'da anahtarlar duruyor ama `worker/llm/client.py` onları
+okumuyor (ADR-001'in "Still open" maddesi). Birisi bunu aktifleştirmeden
+önce STATUS.md'deki bu maddeyi kapatmalı; bu bölüm o güne kadar sadece
+konfigürasyon iskeletinin var olduğunu, çalışan bir yolun olmadığını
+belgeler.
+
 ## Incident playbook
+
+Her madde: belirti → muhtemel sebep → komut. Sırayla değil, belirtiye göre
+atlayın.
+
+### Worker kuyruğu işlemiyor / mesajlar `dead_letter`'a düşüyor
+
+```bash
+docker compose logs --tail=100 worker
+```
+
+- **`extraction_error` audit adımı** — `.env`'de `OPENAI_API_KEY` eksik/geçersiz.
+  Claim `in_human_review`'da kalır, kaybolmaz (tasarım gereği, aciliyet
+  sıralaması bozulmaz).
+- **DB bağlantı hatası, worker açılışta patlıyor** — worker `depends_on:
+  service_started` kullanıyor (`service_healthy` değil, bilinen risk —
+  STATUS.md). `db` henüz hazır olmadan worker başlamış olabilir:
+```bash
+  docker compose restart worker
+```
+
+### `/soru` 503 dönüyor
+
+`rag` servisi embedding modelini yüklüyor olabilir (ilk açılış ~26-45 sn,
+bkz. Setup).
+
+```bash
+docker compose ps   # rag "healthy" mi?
+```
+
+`Restarting` durumundaysa:
+```bash
+docker compose logs rag
+```
+`rag_readonly_url_not_set` uyarısı görünüyorsa `.env`'de
+`RAG_READONLY_DATABASE_URL` eksik — Setup bölümündeki rol adımını
+tamamlamadan `rag` ayakta kalır ama izolasyon uygulanmaz.
+
+### "relation does not exist" / migration hatası
+
+```bash
+docker compose exec api alembic upgrade head
+```
+çalıştırılmamış demektir. Bu, `docker compose up` sonrası kısa bir süre
+için **beklenen** bir geçiş durumudur (bkz. Setup) — ama dakikalar sonra
+hâlâ görünüyorsa migration gerçekten hiç koşmamıştır.
+
+### `worker/rag/` veya `worker/embedding/` değişti ama `rag` servisi eski davranıyor
+
+İkisi aynı image'dan build oluyor (ADR-003) — biri rebuild edilip diğeri
+unutulursa biri bayat kalır, hata vermez, sessizce yanlış davranır:
+
+```bash
+docker compose up -d --build worker rag
+```
+
+### Metrikler ekranı 503 dönüyor
+
+```bash
+curl http://localhost:8000/istatistik/kalite -H "Authorization: Bearer <token>"
+```
+`"Kalite raporu bulunamadı"` → `eval/reports/quality_report.json` image'a
+hiç girmemiş, `python -m eval.report` çalıştırılıp commit'lenmemiş demektir.
+`"dosya bozuk ya da şeması eski"` → rapor `QualityReportOut` şemasıyla
+uyuşmuyor, muhtemelen eski bir `eval/report.py` sürümünden kalma dosya;
+yeniden üretin.
+
+### Port çakışması (5432, 6379, vb.)
+
+```bash
+POSTGRES_HOST_PORT=5433   # .env'e ekleyin
+```
+Bkz. Setup → "Port çakışması". `docker-compose.override.yml` gerekmez.
+
+### Genel kural: "bozuldu ama neden bilmiyorum"
+
+```bash
+docker compose ps                              # hangi servis Up değil
+docker compose logs --tail=50 <servis_adı>      # son hata
+docker compose exec db psql -U claims -d claims_cockpit -c "\dt"   # tablolar gerçekten var mı
+```
+
+Bu üç komut, bu playbook'taki maddelerin %90'ının teşhisini kapsar.
