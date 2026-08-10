@@ -6,7 +6,7 @@ PATTERNS = {
     "TC": re.compile(r"\b[1-9][0-9]{10}\b"),
     "PHONE": re.compile(r"\b(0?5\d{2}[\s-]?\d{3}[\s-]?\d{2}[\s-]?\d{2})\b"),
     # Plate: 2-digit province + 1-3 letters + 2-4 digits (standard TR format)
-    "PLATE": re.compile(r"\b(\d{2}\s?[A-ZÇĞİÖŞÜ]{1,3}\s?\d{2,4})\b"),
+    "PLATE": re.compile(r"\b(\d{2}\s?[A-ZÇĞİÖŞÜ]{1,3}\s?\d{1,4})\b"),
     "IBAN": re.compile(r"\bTR\d{24}\b"),
 }
 

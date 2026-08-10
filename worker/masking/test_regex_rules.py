@@ -46,3 +46,15 @@ def test_multiple_pii_types():
     masked, mappings = mask_text(text)
     types = {m["pii_type"] for m in mappings}
     assert types == {"TC", "PLATE", "PHONE"}
+
+
+def test_single_digit_plate_masking():
+    """A single-digit province plate (e.g. '58 LTB 9') is masked.
+    Regression test for the province-digit group being \d{2,4} (Çağrı's
+    eval PR #66 found GT-000829's "58 LTB 9" reached the model unmasked —
+    single-digit plates fell outside the pattern). Fixed to \d{1,4}.
+    """
+    masked, mappings = mask_text("Plaka 58 LTB 9 hasarli")
+    assert "[PLATE_1]" in masked
+    assert "58 LTB 9" not in masked
+    assert mappings[0]["pii_type"] == "PLATE"
