@@ -16,7 +16,7 @@ pair's work - CLAUDE.md §4 keeps migrations there.
 
 from pathlib import Path
 
-PROMPT_PATH = Path(__file__).resolve().parents[2] / "prompts" / "text_to_sql_v2.txt"
+PROMPT_PATH = Path(__file__).resolve().parents[2] / "prompts" / "text_to_sql_v3.txt"
 
 # Read once: the prompt is static and identical for every question.
 PROMPT_TEMPLATE = PROMPT_PATH.read_text(encoding="utf-8")
@@ -51,8 +51,9 @@ Tablo: claims_flat  (hasar ihbarları — sorguların çoğu buraya gider)
   policy_no            text
   plate                text
   incident_date        date
-  city                 text
-  district             text
+  city                 text     il adı, TÜRKÇE yazımıyla: 'İstanbul', 'İzmir',
+                                'Ankara', 'Bursa', 'Antalya' — ASCII karşılığı değil
+  district             text     ilçe adı, aynı şekilde Türkçe yazımıyla
   damage_description   text     serbest Türkçe metin
   damage_type          text     'collision' | 'single_vehicle' | 'glass' | 'hail'
                                 | 'fire' | 'theft' | 'animal' | 'other'
@@ -69,7 +70,12 @@ Tablo: audit_trail  (pipeline denetim izi — adım süreleri, hatalar)
                             | 'embedding_skipped' | 'queue_approve' | 'queue_reject'
                             | 'rag_question'
   provider        text      LLM sağlayıcı, örn. 'openai'
-  duration_ms     integer   adımın süresi
+  duration_ms     integer   adımın süresi. YALNIZCA LLM çağrısı yapan adımlarda
+                            dolu: masking_sanity, classification, extraction,
+                            embedding, rag_question. Diğerlerinde NULL.
+                            SÜRE SORULARINDA step FİLTRESİ ŞARTTIR — filtresiz
+                            bir AVG(duration_ms) bütün adımları tek potaya atar
+                            ve sonuç hiçbir adımın süresi değildir.
   created_at      timestamptz
 """
 
