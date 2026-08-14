@@ -36,7 +36,7 @@ from worker.masking.unmask import unmask_text
 
 log = structlog.get_logger(__name__)
 
-PROMPT_PATH = Path(__file__).resolve().parents[2] / "prompts" / "rag_sql_answer_v1.txt"
+PROMPT_PATH = Path(__file__).resolve().parents[2] / "prompts" / "rag_sql_answer_v2.txt"
 
 # Read once: the rules are static, only the rows change per question.
 PROMPT_TEMPLATE = PROMPT_PATH.read_text(encoding="utf-8")
