@@ -40,7 +40,11 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session
 
 from worker.llm.client import ModelTier
+from worker.rag.answer import PROMPT_PATH as ANSWER_PROMPT_PATH
 from worker.rag.ask import ask
+from worker.rag.router import PROMPT_PATH as ROUTER_PROMPT_PATH
+from worker.rag.schema_context import PROMPT_PATH as TEXT_TO_SQL_PROMPT_PATH
+from worker.rag.sql_answer import PROMPT_PATH as SQL_ANSWER_PROMPT_PATH
 
 load_dotenv()
 
@@ -274,6 +278,16 @@ def write_run(outcomes: list[Outcome], path: Path, *, meta: dict | None = None) 
         "meta": {
             "run_at": datetime.now(UTC).isoformat(),
             "questions": len(outcomes),
+            # All four, because a question passes through several of them and any
+            # one can be the reason a number moved. The Text-to-SQL prompt went
+            # v1 -> v3 while the last committed run stayed at v1, and nothing in
+            # the file said so.
+            "prompts": {
+                "router": ROUTER_PROMPT_PATH.name,
+                "text_to_sql": TEXT_TO_SQL_PROMPT_PATH.name,
+                "sql_answer": SQL_ANSWER_PROMPT_PATH.name,
+                "answer": ANSWER_PROMPT_PATH.name,
+            },
             **(meta or {}),
         },
         "outcomes": [asdict(item) for item in outcomes],

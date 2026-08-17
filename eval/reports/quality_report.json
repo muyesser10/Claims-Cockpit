@@ -1,9 +1,9 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-08-17T11:53:35.819629+00:00",
+  "generated_at": "2026-08-17T12:21:21.740524+00:00",
   "summary": {
-    "total": 8,
-    "passed": 6,
+    "total": 9,
+    "passed": 7,
     "failed": 2,
     "unmeasured": 0
   },
@@ -80,7 +80,7 @@
     {
       "key": "classification_f1",
       "label": "Sınıflandırma macro-F1 (aciliyet)",
-      "value": 0.9635736244431897,
+      "value": 0.9710761215185993,
       "unit": "ratio",
       "target": 0.85,
       "target_operator": "gte",
@@ -90,8 +90,8 @@
         "description": "sabitlenmiş baseline örneklemi"
       },
       "source": {
-        "run": "gate_post62.json",
-        "measured_at": "2026-08-09",
+        "run": "gate_v3.json",
+        "measured_at": "2026-08-17",
         "model": "gpt-4o-mini"
       },
       "numerator": null,
@@ -105,14 +105,14 @@
         },
         {
           "label": "Yüksek",
-          "value": 0.9565217391304348,
-          "numerator": 33,
+          "value": 0.9696969696969697,
+          "numerator": 32,
           "denominator": 34
         },
         {
           "label": "Normal",
-          "value": 0.9818181818181818,
-          "numerator": 54,
+          "value": 0.9911504424778761,
+          "numerator": 56,
           "denominator": 56
         }
       ],
@@ -124,7 +124,7 @@
     {
       "key": "auto_approve_precision",
       "label": "Otomatik onay precision",
-      "value": 0.9714285714285714,
+      "value": 0.971830985915493,
       "unit": "ratio",
       "target": 0.95,
       "target_operator": "gte",
@@ -134,17 +134,64 @@
         "description": "sabitlenmiş baseline örneklemi"
       },
       "source": {
-        "run": "gate_post62.json",
-        "measured_at": "2026-08-09",
+        "run": "gate_v3.json",
+        "measured_at": "2026-08-17",
         "model": "gpt-4o-mini"
       },
-      "numerator": 68,
-      "denominator": 70,
+      "numerator": 69,
+      "denominator": 71,
       "breakdown": [],
       "notes": [
-        "Kapsam %70,0 — 70/100 ihbar kapıdan geçti.",
-        "Tek taraflı %95 güven alt sınırı %91,3. Örneklem bu genişlikte olduğu sürece hedefin sağlandığı istatistiksel olarak gösterilemez, sadece ölçülür.",
+        "Kapsam %71,0 — 71/100 ihbar kapıdan geçti.",
+        "Tek taraflı %95 güven alt sınırı %91,4. Örneklem bu genişlikte olduğu sürece hedefin sağlandığı istatistiksel olarak gösterilemez, sadece ölçülür.",
         "Yanlış onaylananlar: GT-000094, GT-000325. Bunlardan counterparty_exists kaynaklı olanlar bilinen ground truth kusurudur (data/gt_generator.py etiketi metinden türetmiyor), gerçek model hatası değildir."
+      ],
+      "status": "pass"
+    },
+    {
+      "key": "content_type_f1",
+      "label": "Sınıflandırma macro-F1 (içerik tipi)",
+      "value": 0.9440559440559441,
+      "unit": "ratio",
+      "target": 0.85,
+      "target_operator": "gte",
+      "sample": {
+        "n": 72,
+        "unit": "ihbar",
+        "description": "sınıf dengeli örneklem (her tipten eşit sayıda)"
+      },
+      "source": {
+        "run": "gate_content_type.json",
+        "measured_at": "2026-08-17",
+        "model": "gpt-4o-mini"
+      },
+      "numerator": null,
+      "denominator": null,
+      "breakdown": [
+        {
+          "label": "İhbar",
+          "value": 1.0,
+          "numerator": 24,
+          "denominator": 24
+        },
+        {
+          "label": "Bilgi talebi",
+          "value": 0.923076923076923,
+          "numerator": 24,
+          "denominator": 24
+        },
+        {
+          "label": "Alakasız",
+          "value": 0.9090909090909091,
+          "numerator": 20,
+          "denominator": 24
+        }
+      ],
+      "notes": [
+        "Ayrı bir örneklem üzerinden: sabitlenmiş baseline yalnızca ihbarlardan çekildiği için orada bu alanın tek sınıfı var. Korpustaki 24 `irrelevant` kaydın hepsi burada, diğer iki sınıf ona eşitlendi.",
+        "Bu alan extraction'ı kapıyor — gerçek bir ihbara `info_request` demek, hata vermeden kuyruktan düşürür. §7'nin sessiz kayıp üreten tek sınıflandırma hatası budur, ve manşet sayı onu göstermez: asıl bakılacak yer `İhbar` sınıfının recall'ü, bu koşuda %100,0 — yani hiçbir gerçek ihbar kaybedilmedi.",
+        "Hatanın tamamı iki claim-olmayan sınıf arasında. İkisi de extraction'ı atlayıp normal aciliyete düştüğü için operasyonel sonucu aynı; yanlış olan etiket, akıbet değil.",
+        "Korpus sınıfları belirgin şekilde farklı yazıyor (`irrelevant` 24 kaydın 21'i benzersiz, `info_request` 74'ün 74'ü). Bu sayı sistemin ayırt etme gücünün üst sınırı sayılmamalı — kritik recall'ün korpus üzerinde %100 vermesiyle aynı tuzak."
       ],
       "status": "pass"
     },

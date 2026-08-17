@@ -28,7 +28,9 @@ from pathlib import Path
 
 from eval.loader import EvalRecord
 from eval.scoring import score_record
+from worker.classification.classifier import PROMPT_PATH as CLASSIFICATION_PROMPT_PATH
 from worker.classification.classifier import classify
+from worker.extraction.extractor import PROMPT_PATH as EXTRACTION_PROMPT_PATH
 from worker.extraction.extractor import extract
 from worker.llm.client import LlmClient, ModelTier
 from worker.masking.pipeline import mask_all
@@ -336,6 +338,14 @@ def write_run(
             "records": len(outcome.records),
             "failures": outcome.failures,
             "masked": outcome.masked,
+            # Both prompts, because this run uses both and either one moving
+            # changes the numbers. Recorded after a classification prompt was
+            # replaced and two committed §7 rows silently became measurements of
+            # a prompt that no longer ships.
+            "prompts": {
+                "classification": CLASSIFICATION_PROMPT_PATH.name,
+                "extraction": EXTRACTION_PROMPT_PATH.name,
+            },
             **(meta or {}),
         },
         "records": [asdict(item) for item in outcome.records],

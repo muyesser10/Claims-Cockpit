@@ -89,6 +89,13 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="channel=count,... (draws a fresh random sample instead of the pinned baseline)",
     )
+    parser.add_argument(
+        "--ids",
+        type=Path,
+        default=None,
+        metavar="PATH",
+        help="a different pinned sample file (default: eval/fixtures/baseline_100_ids.json)",
+    )
     parser.add_argument("--out", type=Path, default=None, help="where to write the results")
     return parser
 
@@ -141,6 +148,12 @@ def main(argv: list[str] | None = None) -> int:
     if args.mix:
         records = sample(records, seed=args.seed, mix=args.mix)
         description = f"random sample, seed {args.seed}, mix {args.mix}"
+    elif args.ids:
+        # A second pinned sample, for a metric the baseline cannot carry. The
+        # baseline is drawn from the claim-only pool, so content_type has one
+        # class there; eval/fixtures/content_type_ids.json is class-balanced.
+        records = select(records, baseline_ids(args.ids))
+        description = f"pinned sample: {args.ids.name}"
     else:
         records = select(records, baseline_ids())
         description = "pinned baseline sample"
