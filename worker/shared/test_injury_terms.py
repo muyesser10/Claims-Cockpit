@@ -67,6 +67,44 @@ def test_death_is_not_matched_through_ascii_folding():
     assert find_injury_signals("Kaza boyle olustu, hasar buyuk.") == []
 
 
+# --- context terms: medical involvement is not injury ---------------------
+# Measured over eval/fixtures/injury_phrasings.jsonl: these four shapes produced
+# four of the five false criticals in the injury-free control group. The rule is
+# grammatical - a bare noun modifying another noun names a thing in the world.
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Aracı hastane otoparkında çizdiler.",
+        "Ambulans yolu kapatmıştı, ona çarptım.",
+        "Sedye taşıyan bir araca çarptım.",
+        "Acil servis tabelasına çarptım.",
+    ],
+)
+def test_a_medical_word_as_a_collision_target_is_not_an_injury(text):
+    assert find_injury_signals(text) == []
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Eşim hastanede, poliçe bunu karşılıyor mu?",  # inflected: someone is there
+        "hastaneye kaldırıldı",  # inflected: someone was taken there
+        "eşim acil servise kaldırıldı",
+        "ambulans çağırdık",  # bare subject, but the verb is the evidence
+        "Kaza oldu, ambulans geldi",
+    ],
+)
+def test_a_medical_word_about_a_person_still_signals(text):
+    assert find_injury_signals(text)
+
+
+def test_one_disqualified_mention_does_not_bury_a_later_one():
+    """The guard runs per occurrence, not per text."""
+    assert find_injury_signals("Ambulans yolu kapalıydı, sonra ambulans çağırdık")
+
+
 def test_normalize_tr_uppercase_dotless_i():
     assert _normalize_tr("YARALI") == "yaralı"
 
