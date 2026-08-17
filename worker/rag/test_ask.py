@@ -132,12 +132,17 @@ def _stub_search(monkeypatch, sources: list[RetrievedClaim]) -> list[dict]:
 
 
 def _stub_run_query(monkeypatch, rows: list[dict] | None = None, raises: Exception | None = None):
+    """Replace SQL execution and return the list of statements it was handed."""
+    executed: list[str] = []
+
     def fake_run_query(_db, sql):
+        executed.append(sql)
         if raises is not None:
             raise raises
         return rows or []
 
     monkeypatch.setattr(ask_module, "run_query", fake_run_query)
+    return executed
 
 
 # --- the retrieval path --------------------------------------------------
@@ -611,3 +616,116 @@ def test_offline_unknown_question_refuses_without_crashing(db, demo_offline, mon
     assert result.answerable is False
     assert "bu demo için hazırlanmamış" in result.refusal_reason
     assert result.sources == []
+
+
+# --- the operator's question never reaches the model unmasked ---------------
+# docs/STATUS.md carried this as the one open PII leak: everything else on the
+# path was masked, the question was not. See worker/rag/question_mask.py for why
+# only the regex layer applies and why the placeholders are namespaced.
+
+# Deliberately not the plate text_to_sql uses in its refusal example: a
+# leak assertion has to fail on a leak, not on the prompt quoting a plate.
+PLATE = "06 XYZ 789"
+PLATE_QUESTION = f"{PLATE} plakalı aracın ihbarı hangi durumda?"
+PLATE_SQL = "SELECT status FROM claims_flat WHERE plate = '[Q_PLATE_1]' LIMIT 100"
+
+
+def _sent_to_model(client: StubClient) -> str:
+    """Everything that crossed the wire, as one string."""
+    return "\n".join(
+        f"{call.get('system_prompt', '')}\n{call.get('user_content', '')}" for call in client.calls
+    )
+
+
+def test_the_plate_in_a_question_never_reaches_the_model(db, monkeypatch):
+    _stub_run_query(monkeypatch, rows=[{"status": "approved"}])
+    client = StubClient(
+        QuestionRoute=_route(route="sql"),
+        SqlQuery=_sql_query(sql=PLATE_SQL),
+        SqlNarration=_narration(answer="[Q_PLATE_1] plakalı ihbar onaylanmış."),
+    )
+
+    ask(db, PLATE_QUESTION, client=client)
+
+    assert PLATE not in _sent_to_model(client)
+    assert "[Q_PLATE_1]" in _sent_to_model(client)
+
+
+def test_the_query_that_runs_carries_the_real_plate(db, monkeypatch):
+    """The placeholder is put back after the guard and before execution: a query
+    against '[Q_PLATE_1]' would match no row and answer "kayıt bulunamadı"."""
+    executed = _stub_run_query(monkeypatch, rows=[{"status": "approved"}])
+    client = StubClient(
+        QuestionRoute=_route(route="sql"),
+        SqlQuery=_sql_query(sql=PLATE_SQL),
+        SqlNarration=_narration(answer="Onaylanmış."),
+    )
+
+    ask(db, PLATE_QUESTION, client=client)
+
+    assert executed == [f"SELECT status FROM claims_flat WHERE plate = '{PLATE}' LIMIT 100"]
+
+
+def test_the_operator_gets_their_own_value_back(db, monkeypatch):
+    _stub_run_query(monkeypatch, rows=[{"status": "approved"}])
+    client = StubClient(
+        QuestionRoute=_route(route="sql"),
+        SqlQuery=_sql_query(sql=PLATE_SQL),
+        SqlNarration=_narration(answer="[Q_PLATE_1] plakalı ihbar onaylanmış."),
+    )
+
+    answer = ask(db, PLATE_QUESTION, client=client)
+
+    assert answer.answer == f"{PLATE} plakalı ihbar onaylanmış."
+    assert answer.question == PLATE_QUESTION
+    assert answer.sql is not None and PLATE in answer.sql
+
+
+def test_the_audit_row_keeps_the_question_masked(db, monkeypatch):
+    """audit_trail has not held raw PII since the masking sanity leak."""
+    _stub_run_query(monkeypatch, rows=[{"status": "approved"}])
+    client = StubClient(
+        QuestionRoute=_route(route="sql"),
+        SqlQuery=_sql_query(sql=PLATE_SQL),
+        SqlNarration=_narration(answer="Onaylanmış."),
+    )
+
+    ask(db, PLATE_QUESTION, client=client)
+
+    rows = [row for row in db.added if getattr(row, "step", None) == AUDIT_STEP]
+    assert rows, "no audit row written"
+    written = str(rows[0].detail)
+    assert PLATE not in written
+    assert "[Q_PLATE_1]" in written
+
+
+def test_retrieval_searches_on_the_raw_question(db, monkeypatch):
+    """The encoder is local (ADR-002), so masking here would cost ranking
+    quality and protect nothing."""
+    calls = _stub_search(monkeypatch, [_source()])
+    client = StubClient(
+        QuestionRoute=_route(route="retrieval"),
+        RagAnswer=_rag_answer(answer="Durum: onaylandı [1]"),
+    )
+
+    ask(db, PLATE_QUESTION, client=client)
+
+    assert calls[0]["question"] == PLATE_QUESTION
+    assert PLATE not in _sent_to_model(client)
+
+
+def test_a_claims_own_placeholder_is_left_alone_in_the_answer(db, monkeypatch):
+    """The reason the question uses its own namespace: claim text was masked at
+    ingest with numbering this code cannot see, so [PLATE_1] there is a
+    different plate and must not be revealed as the operator's."""
+    _stub_search(monkeypatch, [_source()])
+    client = StubClient(
+        QuestionRoute=_route(route="retrieval"),
+        RagAnswer=_rag_answer(answer="[Q_PLATE_1] sorusuna karşılık [PLATE_1] bulundu [1]"),
+    )
+
+    answer = ask(db, PLATE_QUESTION, client=client)
+
+    assert answer.answer is not None
+    assert answer.answer.startswith(PLATE)
+    assert "[PLATE_1]" in answer.answer

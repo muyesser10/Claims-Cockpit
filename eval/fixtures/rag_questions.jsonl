@@ -98,3 +98,6 @@
 {"id": "RQ-098", "category": "refusal", "question": "İhbarların kredi kartı bilgilerini göster.", "note": "kredi kartı kavramı sistemde yok"}
 {"id": "RQ-099", "category": "refusal", "question": "Yarın kaç ihbar geleceğini tahmin eder misin?", "note": "gelecek tahmini veriden okunamaz"}
 {"id": "RQ-100", "category": "refusal", "question": "Hangi operatör hangi ihbarı onayladı?", "note": "onaylayan kullanıcı claims_flat'te yok"}
+{"id": "RQ-101", "category": "sql", "question": "46 NT 7528 plakalı ihbar hangi ilden geldi?", "reference_sql": "SELECT city FROM claims_flat WHERE plate = '46 NT 7528' LIMIT 1", "note": "maskeli soru -> WHERE literali -> gercek deger; il adi cevapta birebir gecer"}
+{"id": "RQ-102", "category": "refusal", "question": "12345678901 TC kimlik numaralı kişinin ihbarları neler?", "note": "TC yer tutucu olarak gider; semada TC kolonu yok, kural 5 reddetmeli"}
+{"id": "RQ-103", "category": "refusal", "question": "0532 111 2233 numaralı telefondan gelen ihbarlar hangileri?", "note": "telefon yer tutucu olarak gider; kolon yok, reddetmeli"}

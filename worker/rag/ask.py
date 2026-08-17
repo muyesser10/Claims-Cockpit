@@ -23,7 +23,9 @@ from sqlalchemy.orm import Session
 from api.models.db import AuditTrail
 from worker.embedding.encoder import Encoder
 from worker.llm.client import LlmClient, get_llm_client
+from worker.masking.unmask import unmask_text
 from worker.rag.answer import answer_question
+from worker.rag.question_mask import mask_question
 from worker.rag.retrieval import RetrievedClaim, search
 from worker.rag.router import Route, RouteResult, route_question
 from worker.rag.sql_answer import narrate, run_query
@@ -74,6 +76,31 @@ class QuestionAnswer(BaseModel):
     duration_ms: int
 
 
+@dataclass(frozen=True)
+class _Question:
+    """The question in the two forms this module has to keep apart.
+
+    `raw` is what the operator typed. It stays on this machine: it is echoed
+    back to the screen, it keys the offline fixture set, and it is what the
+    local encoder embeds - masking that would cost retrieval quality and buy
+    nothing, because the encoder is not a third party (ADR-002).
+
+    `masked` is the only form any model sees. `mappings` reverses it, and its
+    placeholders live in their own namespace so they cannot be confused with the
+    ones already inside claim text (question_mask.py).
+    """
+
+    raw: str
+    masked: str
+    mappings: list[dict]
+
+    def reveal(self, text: str | None) -> str | None:
+        """Put the operator's own values back into something a model wrote."""
+        if text is None or not self.mappings:
+            return text
+        return unmask_text(text, self.mappings)
+
+
 @dataclass
 class _Outcome:
     """A branch's result: what the caller sees, plus what only the audit row does.
@@ -119,7 +146,21 @@ def ask(
     client = client or get_llm_client(external_ref=normalize_question(question))
     started = time.perf_counter()
 
-    route = route_question(question, question_id=question_id, client=client, seed=seed)
+    # Masked once, here, so no step below can forget to. Everything downstream
+    # takes `asked` and reads `raw` only where the value stays on this machine.
+    masked, mappings = mask_question(question)
+    asked = _Question(raw=question, masked=masked, mappings=mappings)
+    if mappings:
+        # Types and counts, never the values - the same rule the masking sanity
+        # layer settled on after its leak (docs/STATUS.md).
+        log.info(
+            "rag_question_masked",
+            question_id=question_id,
+            pii_types=sorted({mapping["pii_type"] for mapping in mappings}),
+            count=len(mappings),
+        )
+
+    route = route_question(asked.masked, question_id=question_id, client=client, seed=seed)
     log.info(
         "rag_route",
         question_id=question_id,
@@ -131,12 +172,12 @@ def ask(
 
     if route.route is Route.SQL:
         outcome = _answer_with_sql(
-            sql_db or db, question, question_id=question_id, client=client, seed=seed
+            sql_db or db, asked, question_id=question_id, client=client, seed=seed
         )
     else:
         outcome = _answer_with_retrieval(
             db,
-            question,
+            asked,
             route,
             question_id=question_id,
             client=client,
@@ -153,7 +194,10 @@ def ask(
     if audit:
         _log_question(
             db,
-            question=question,
+            # The masked form on purpose. audit_trail is read by the error
+            # centre and queried by /soru itself, and raw PII has not been
+            # written to this table since the masking sanity leak was fixed.
+            question=asked.masked,
             question_id=question_id,
             route=route,
             answer=answer,
@@ -164,7 +208,7 @@ def ask(
 
 def _answer_with_sql(
     sql_db: Session,
-    question: str,
+    asked: _Question,
     *,
     question_id: str,
     client: LlmClient,
@@ -183,11 +227,11 @@ def _answer_with_sql(
     expected outcome of every SQL question, which is exactly why it has to
     surface as a readable Turkish refusal rather than a 500.
     """
-    generated = generate_sql(question, question_id=question_id, client=client, seed=seed)
+    generated = generate_sql(asked.masked, question_id=question_id, client=client, seed=seed)
 
     if not generated.answerable:
         return _Outcome(
-            _refusal(question, "sql", generated.refusal_reason or CANNOT_ANSWER_REFUSAL),
+            _refusal(asked.raw, "sql", generated.refusal_reason or CANNOT_ANSWER_REFUSAL),
             {"outcome": "model_refused", "attempts": generated.attempts},
         )
 
@@ -199,7 +243,7 @@ def _answer_with_sql(
             attempts=generated.attempts,
         )
         return _Outcome(
-            _refusal(question, "sql", GENERATION_FAILED_REFUSAL),
+            _refusal(asked.raw, "sql", GENERATION_FAILED_REFUSAL),
             {
                 "outcome": "guard_rejected",
                 "guard_error": generated.guard_error,
@@ -207,8 +251,15 @@ def _answer_with_sql(
             },
         )
 
+    # The placeholder goes into the query as a literal and comes out as the
+    # operator's own value, after the guard has vetted the statement. Order
+    # matters: the guard regenerates the SQL from its parse tree, so revealing
+    # first would hand it a plate to re-quote, and revealing later would run a
+    # query against a value no row holds.
+    executable = asked.reveal(generated.sql)
+
     try:
-        rows = run_query(sql_db, generated.sql)
+        rows = run_query(sql_db, executable)
     except SQLAlchemyError as exc:
         # A failed statement poisons its transaction until something rolls it
         # back, and this session goes back to a pool. It no longer protects the
@@ -222,20 +273,22 @@ def _answer_with_sql(
             error=str(exc),
         )
         return _Outcome(
-            _refusal(question, "sql", EXECUTION_FAILED_REFUSAL, sql=generated.sql),
+            _refusal(asked.raw, "sql", EXECUTION_FAILED_REFUSAL, sql=asked.reveal(generated.sql)),
             {"outcome": "execution_failed", "error": str(exc), "sql": generated.sql},
         )
 
-    narrated = narrate(question, rows, question_id=question_id, client=client, seed=seed)
+    narrated = narrate(asked.masked, rows, question_id=question_id, client=client, seed=seed)
     return _Outcome(
         QuestionAnswer(
-            question=question,
-            answer=narrated.answer,
+            question=asked.raw,
+            # Revealed for the screen, masked in the audit detail below. The
+            # operator is owed their own value back; audit_trail is not.
+            answer=asked.reveal(narrated.answer),
             mode="sql",
             answerable=narrated.answerable,
             refusal_reason=narrated.refusal_reason,
             sources=[],
-            sql=generated.sql,
+            sql=asked.reveal(generated.sql),
             row_count=narrated.row_count,
             duration_ms=0,
         ),
@@ -252,7 +305,7 @@ def _answer_with_sql(
 
 def _answer_with_retrieval(
     db: Session,
-    question: str,
+    asked: _Question,
     route: RouteResult,
     *,
     question_id: str,
@@ -260,14 +313,24 @@ def _answer_with_retrieval(
     encoder: Encoder | None,
     seed: int | None,
 ) -> _Outcome:
-    """Vector search, then a cited answer over what it found."""
-    sources = search(db, question, urgency=route.urgency, status=route.status, encoder=encoder)
-    replied = answer_question(question, sources, question_id=question_id, client=client, seed=seed)
+    """Vector search, then a cited answer over what it found.
+
+    Search reads the raw question. The encoder runs locally (ADR-002), so
+    nothing leaves the machine, and a masked question would embed a placeholder
+    where a plate used to be and rank on it.
+    """
+    sources = search(db, asked.raw, urgency=route.urgency, status=route.status, encoder=encoder)
+    replied = answer_question(
+        asked.masked, sources, question_id=question_id, client=client, seed=seed
+    )
 
     return _Outcome(
         QuestionAnswer(
-            question=question,
-            answer=replied.answer,
+            question=asked.raw,
+            # Only the question's own placeholders are reversed. The ones that
+            # came out of claim text stay as they are, which is what keeps this
+            # path from printing one claim's plate for another's.
+            answer=asked.reveal(replied.answer),
             mode=route.mode,
             answerable=replied.answerable,
             refusal_reason=replied.refusal_reason,
