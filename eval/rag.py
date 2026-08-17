@@ -143,19 +143,34 @@ def _fold(value: str) -> str:
     return lowered.translate(str.maketrans("çğıöşü", "cgiosu"))
 
 
+def _fold_any(candidates: list[str], text_value: str) -> bool:
+    """Whether any candidate appears in `text_value`, folded on both sides."""
+    haystack = _fold(text_value)
+    return any(_fold(item) in haystack for item in candidates)
+
+
 def score_sql(question: Question, answer, expected) -> tuple[bool, str]:
-    """The reference value has to be in the answer, as a number or as a word."""
+    """The reference value has to be in the answer, as a number or as a word.
+
+    `expected_any` is a fallback, never a substitute. It used to be checked
+    first, which quietly turned a self-updating key into a hand-written one: on
+    2026-08-17 RQ-045 failed because it still expected "dolu" while the
+    reference query returned "other" and the system had answered "other"
+    correctly. A hand-written list can only widen what counts as right here; it
+    can no longer decide it.
+    """
     if not answer.answerable:
         return False, f"reddetti: {answer.refusal_reason}"
     if answer.answer is None:
         return False, "answerable ama cevap boş"
 
-    if question.expected_any:
-        wanted = [_fold(item) for item in question.expected_any]
-        haystack = _fold(answer.answer)
-        if any(item in haystack for item in wanted):
-            return True, ""
-        return False, f"cevapta {question.expected_any} yok"
+    if question.expected_any and _fold_any(question.expected_any, answer.answer):
+        return True, ""
+
+    if expected is None or expected == "":
+        if question.expected_any:
+            return False, f"cevapta {question.expected_any} yok"
+        return False, "referans sorgu değer döndürmedi"
 
     if isinstance(expected, (int, float)) or (
         hasattr(expected, "__float__") and not isinstance(expected, str)

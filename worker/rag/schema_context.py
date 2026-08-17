@@ -64,11 +64,15 @@ Tablo: claims_flat  (hasar ihbarları — sorguların çoğu buraya gider)
 Tablo: audit_trail  (pipeline denetim izi — adım süreleri, hatalar)
   id              bigint
   claim_id        bigint    -> claims_flat.id
-  step            text      'masking' | 'masking_sanity' | 'classification' | 'routing'
-                            | 'extraction' | 'extraction_error' | 'extraction_skipped'
+  step            text      'masking' | 'masking_error' | 'masking_sanity'
+                            | 'pii_found' | 'classification' | 'classification_error'
+                            | 'routing' | 'auto_approve' | 'extraction'
+                            | 'extraction_error' | 'extraction_skipped'
                             | 'validation' | 'embedding' | 'embedding_error'
-                            | 'embedding_skipped' | 'queue_approve' | 'queue_reject'
-                            | 'rag_question'
+                            | 'approve' | 'reject' | 'rag_question'
+                            'auto_approve' otomatik onay kapısının kararıdır ve
+                            her ihbar için yazılır — onaylansın onaylanmasın.
+                            'approve' / 'reject' operatörün kuyruktaki kararıdır.
   provider        text      LLM sağlayıcı, örn. 'openai'
   duration_ms     integer   adımın süresi. YALNIZCA LLM çağrısı yapan adımlarda
                             dolu: masking_sanity, classification, extraction,
