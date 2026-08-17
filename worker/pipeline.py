@@ -180,6 +180,11 @@ def step_classify(db: Session, msg: RawMessage, masked_text: str) -> Classificat
                 "llm_urgency": str(result.llm_urgency),
                 "urgency_source": result.urgency_source,
                 "injury_signals": result.injury_signals,
+                # The sentence the model says proves an injury. "Why is this
+                # critical" is the error centre's question and an auditor's, and
+                # the quote answers it in a way a boolean cannot. Safe to store:
+                # it is a span of the masked text the model was shown.
+                "injury_evidence": result.injury_evidence,
                 "reasoning": result.reasoning,
             },
             provider="openai",

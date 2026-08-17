@@ -94,6 +94,12 @@ class Outcome:
     # None when the run was offline: absence of an answer, not a negative one.
     critical: bool | None = None
     llm_urgency: str | None = None
+    # The quote the model offered as proof of injury, and whether it is really in
+    # the text. A prompt that asks for evidence is only worth anything if the
+    # evidence is real; an invented quote is the same failure extraction guards
+    # against, arriving through a different field.
+    injury_evidence: str | None = None
+    evidence_found: bool | None = None
 
     @property
     def deterministic(self) -> bool:
@@ -143,6 +149,13 @@ def run(
             )
             outcome.critical = result.urgency is Urgency.CRITICAL
             outcome.llm_urgency = str(result.llm_urgency)
+            outcome.injury_evidence = result.injury_evidence
+            if result.injury_evidence:
+                # Same locator extraction uses, rather than a second rule: exact
+                # match, then the same words across reflowed whitespace.
+                from worker.extraction.extractor import locate_quote
+
+                outcome.evidence_found = locate_quote(result.injury_evidence, case.text) is not None
         outcomes.append(outcome)
     return outcomes
 
@@ -209,6 +222,15 @@ def format_report(outcomes: list[Outcome], *, live: bool) -> str:
             lines.append(f"  end-to-end false criticals         {_rate(false_end, len(negatives))}")
         lines.append("")
 
+    if live:
+        quoted = [o for o in outcomes if o.injury_evidence]
+        if quoted:
+            real = sum(1 for o in quoted if o.evidence_found)
+            lines.append(f"evidence quotes offered {len(quoted)}, found in the text {real}")
+            for o in quoted:
+                if not o.evidence_found:
+                    lines.append(f"    NOT FOUND {o.case.id}  {o.injury_evidence!r}")
+
     return "\n".join(lines)
 
 
@@ -274,6 +296,8 @@ def main(argv: list[str] | None = None) -> int:
                             "signals": o.signals,
                             "critical": o.critical,
                             "llm_urgency": o.llm_urgency,
+                            "injury_evidence": o.injury_evidence,
+                            "evidence_found": o.evidence_found,
                         }
                         for o in outcomes
                     ],

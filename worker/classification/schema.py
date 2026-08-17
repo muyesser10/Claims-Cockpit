@@ -48,14 +48,26 @@ class ClaimClassification(BaseModel):
             "soruluyorsa info_request; sigortayla ilgisi yoksa irrelevant."
         ),
     )
-    urgency: Urgency = Field(
+    # The injury pair sits ahead of urgency deliberately. Fields are generated in
+    # declaration order, and urgency used to be decided before the model had
+    # considered injury at all - while the domain rule runs the other way round:
+    # an injury forces critical. Now the evidence is written first, the verdict
+    # follows from it, and urgency is answered last, once both are on the page.
+    injury_evidence: str | None = Field(
+        default=None,
         description=(
-            "Aciliyet. Yaralanma varsa critical; yaralanma yok ama araç "
-            "kullanılamaz durumdaysa high; aksi halde normal."
+            "Yaralanmayı gösteren ifadeyi metinden BİREBİR alıntıla. Kelime ekleme "
+            "veya düzeltme yapma. Yaralanma anlatılmıyorsa null bırak."
         ),
     )
     injury_mentioned: bool = Field(
         description=(
-            "Metinde yaralanma veya can güvenliği işareti var mı? Hiç söz edilmiyorsa false ver."
+            "Yukarıda bir alıntı yazdıysan true, null bıraktıysan false. Alıntısız true verme."
+        ),
+    )
+    urgency: Urgency = Field(
+        description=(
+            "Aciliyet. Yaralanma varsa critical; yaralanma yok ama araç "
+            "kullanılamaz durumdaysa high; aksi halde normal."
         ),
     )

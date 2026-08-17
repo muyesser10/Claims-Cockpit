@@ -21,7 +21,7 @@ from worker.classification.schema import ClaimClassification, ContentType, Urgen
 from worker.llm.client import LlmClient, ModelTier, get_llm_client
 from worker.shared.injury_terms import find_injury_signals
 
-PROMPT_PATH = Path(__file__).resolve().parents[2] / "prompts" / "classification_v1.txt"
+PROMPT_PATH = Path(__file__).resolve().parents[2] / "prompts" / "classification_v3.txt"
 
 # Read once: the prompt is static and identical for every message.
 SYSTEM_PROMPT = PROMPT_PATH.read_text(encoding="utf-8")
@@ -46,6 +46,11 @@ class ClassificationResult(BaseModel):
     llm_urgency: Urgency
     urgency_source: str
     injury_signals: list[str]
+    # The quote the model says shows an injury, carried rather than dropped: it
+    # is the answer to "why is this claim critical", which is the question the
+    # error centre and an auditor both ask. None when the model found none, and
+    # when no model answered at all.
+    injury_evidence: str | None
     reasoning: str
     model: str
     duration_ms: int
@@ -82,6 +87,9 @@ def fallback_classification(text: str) -> ClassificationResult:
         llm_urgency=urgency,
         urgency_source=INJURY_OVERRIDE if signals else FALLBACK,
         injury_signals=signals,
+        # No model answered, so there is no quote. The matched terms are in
+        # injury_signals and are a different kind of evidence.
+        injury_evidence=None,
         reasoning="classification call failed; injury terms only",
         model="none",
         duration_ms=0,
@@ -151,6 +159,7 @@ def classify(
         llm_urgency=answer.urgency,
         urgency_source=source,
         injury_signals=signals,
+        injury_evidence=answer.injury_evidence,
         reasoning=answer.reasoning,
         model=client.settings.model_for(tier),
         duration_ms=duration_ms,

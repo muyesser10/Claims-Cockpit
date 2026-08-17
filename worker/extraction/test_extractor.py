@@ -76,6 +76,35 @@ def test_reflowed_quote_still_matches():
     assert TEXT[span[0] : span[1]].split() == ["bildirmek", "istiyorum.", "11", "Temmuz"]
 
 
+def test_a_lowercased_quote_still_matches_and_keeps_its_offsets():
+    """Models lowercase the first letter when they quote mid-sentence.
+
+    Nothing is invented there, so the span still has to come back - and it has
+    to index the original text, not a folded copy.
+    """
+    original = TEXT[TEXT.index("45 GAK") : TEXT.index("45 GAK") + 19]
+    span = locate_quote(original.lower(), TEXT)
+
+    assert span is not None
+    assert TEXT[span[0] : span[1]] == original
+
+
+def test_turkish_dotted_i_folds_the_turkish_way():
+    """ "IZMIR".lower() is "izmir" in ASCII and "ızmır" in Turkish; only one of
+    those matches the text."""
+    text = "Olay İZMİR Bornova'da oldu."
+
+    span = locate_quote("izmir bornova'da", text)
+
+    assert span is not None
+    assert text[span[0] : span[1]] == "İZMİR Bornova'da"
+
+
+def test_a_quote_that_is_still_absent_is_still_unsupported():
+    """Case tolerance forgives spelling, not invention."""
+    assert locate_quote("bambaşka bir cümle", TEXT) is None
+
+
 def test_invented_quote_demotes_the_field():
     """The hallucination defence: evidence that is not in the text is not evidence."""
     result = run(
