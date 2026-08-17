@@ -42,6 +42,7 @@ import argparse
 import json
 import sys
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -59,6 +60,17 @@ FIXTURE = Path(__file__).resolve().parent / "fixtures" / "injury_phrasings.jsonl
 GROUPS = ("non_canonical", "ascii_fold", "false_positive_control")
 
 
+def default_prompt_name() -> str:
+    """The prompt classifier.py reads when none is given.
+
+    Imported inside the function for the same reason `classify` is: the offline
+    path must not need an API key, and the client module sits behind this import.
+    """
+    from worker.classification.classifier import PROMPT_PATH
+
+    return PROMPT_PATH.name
+
+
 @dataclass
 class Case:
     id: str
@@ -67,6 +79,12 @@ class Case:
     channel: str
     text: str
     note: str
+    # Which half this case belongs to. `tune` are the cases prompt and dictionary
+    # work was done while looking at; `holdout` were written without running
+    # anything against them. Both numbers are reported, and only the second one
+    # estimates reach rather than fit. Defaulted so a fixture written before the
+    # split still loads.
+    split: str = "tune"
 
 
 @dataclass
@@ -92,8 +110,21 @@ def load_cases(path: Path = FIXTURE) -> list[Case]:
         return [Case(**json.loads(line)) for line in handle if line.strip()]
 
 
-def run(cases: list[Case], *, live: bool, seed: int, tier: ModelTier) -> list[Outcome]:
-    """Deterministic rule for every case; the classifier too when `live`."""
+def run(
+    cases: list[Case],
+    *,
+    live: bool,
+    seed: int,
+    tier: ModelTier,
+    system_prompt: str | None = None,
+) -> list[Outcome]:
+    """Deterministic rule for every case; the classifier too when `live`.
+
+    `system_prompt` overrides the versioned file classifier.py would read, so two
+    prompt variants can be compared on one fixture at one seed. Switching the
+    default is a decision that should follow the measurement rather than precede
+    it, and without this there is no way to run the measurement.
+    """
     outcomes = []
     for index, case in enumerate(cases, start=1):
         outcome = Outcome(case=case, signals=find_injury_signals(case.text))
@@ -108,6 +139,7 @@ def run(cases: list[Case], *, live: bool, seed: int, tier: ModelTier) -> list[Ou
                 message_id=f"injury-recall-{case.id}",
                 seed=seed,
                 tier=tier,
+                system_prompt=system_prompt,
             )
             outcome.critical = result.urgency is Urgency.CRITICAL
             outcome.llm_urgency = str(result.llm_urgency)
@@ -149,21 +181,34 @@ def format_report(outcomes: list[Outcome], *, live: bool) -> str:
         lines.append("")
 
     # The headline: recall over both hard positive groups, and what the fallback
-    # keeps when the model is unreachable.
+    # keeps when the model is unreachable. Split three ways, because a number
+    # measured on the cases the rules were written against says how well they
+    # were written, not how far they reach.
     hard = by_group["non_canonical"] + by_group["ascii_fold"]
-    det = sum(o.deterministic for o in hard)
-    lines.append("=" * 72)
-    lines.append(f"hard positives (non_canonical + ascii_fold), n={len(hard)}")
-    lines.append(f"  deterministic recall (= fallback recall)  {_rate(det, len(hard))}")
-    if live:
-        final = sum(o.critical is True for o in hard)
-        lines.append(f"  pipeline recall (rule OR model)          {_rate(final, len(hard))}")
-        lines.append(f"  lost if the LLM is down                  {final - det} of {len(hard)}")
     controls = by_group["false_positive_control"]
-    lines.append(
-        f"false criticals on {len(controls)} injury-free controls    "
-        f"{_rate(sum(o.deterministic for o in controls), len(controls))}"
-    )
+    lines.append("=" * 72)
+
+    for split in ("tune", "holdout", None):
+        positives = [o for o in hard if split is None or o.case.split == split]
+        negatives = [o for o in controls if split is None or o.case.split == split]
+        if not positives and not negatives:
+            continue
+
+        label = "all" if split is None else split
+        det = sum(o.deterministic for o in positives)
+        lines.append(f"{label:<8} hard positives n={len(positives)}, controls n={len(negatives)}")
+        lines.append(f"  deterministic recall (= fallback)   {_rate(det, len(positives))}")
+        if live:
+            final = sum(o.critical is True for o in positives)
+            lines.append(f"  pipeline recall (rule OR model)    {_rate(final, len(positives))}")
+            lines.append(f"  lost if the LLM is down            {final - det} of {len(positives)}")
+        false_fires = sum(o.deterministic for o in negatives)
+        lines.append(f"  deterministic false criticals      {_rate(false_fires, len(negatives))}")
+        if live:
+            false_end = sum(o.critical is True for o in negatives)
+            lines.append(f"  end-to-end false criticals         {_rate(false_end, len(negatives))}")
+        lines.append("")
+
     return "\n".join(lines)
 
 
@@ -174,31 +219,65 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--tier", choices=[t.value for t in ModelTier], default=ModelTier.CHEAP.value
     )
+    parser.add_argument(
+        "--prompt",
+        type=Path,
+        default=None,
+        help="classification prompt to use instead of the one classifier.py reads",
+    )
+    parser.add_argument(
+        "--split", choices=("tune", "holdout"), default=None, help="only one half of the fixture"
+    )
     parser.add_argument("--out", type=Path, default=None, help="write raw outcomes as JSON")
     args = parser.parse_args(argv)
 
     cases = load_cases()
+    if args.split:
+        cases = [case for case in cases if case.split == args.split]
     if args.live:
         print(f"about to call the model for {len(cases)} cases", file=sys.stderr)
-    outcomes = run(cases, live=args.live, seed=args.seed, tier=ModelTier(args.tier))
+
+    system_prompt = args.prompt.read_text(encoding="utf-8") if args.prompt else None
+    outcomes = run(
+        cases,
+        live=args.live,
+        seed=args.seed,
+        tier=ModelTier(args.tier),
+        system_prompt=system_prompt,
+    )
     print(format_report(outcomes, live=args.live))
 
     if args.out:
         args.out.parent.mkdir(parents=True, exist_ok=True)
         args.out.write_text(
             json.dumps(
-                [
-                    {
-                        "id": o.case.id,
-                        "group": o.case.group,
-                        "injury": o.case.injury,
-                        "text": o.case.text,
-                        "signals": o.signals,
-                        "critical": o.critical,
-                        "llm_urgency": o.llm_urgency,
-                    }
-                    for o in outcomes
-                ],
+                {
+                    # Which prompt produced these answers. The repo versions its
+                    # prompts and its runs did not record which version they were
+                    # measured with, so a number could not be traced back to the
+                    # text that produced it.
+                    "meta": {
+                        "run_at": datetime.now(UTC).isoformat(),
+                        "live": args.live,
+                        "seed": args.seed,
+                        "tier": args.tier,
+                        "prompt": args.prompt.name if args.prompt else default_prompt_name(),
+                        "cases": len(outcomes),
+                    },
+                    "outcomes": [
+                        {
+                            "id": o.case.id,
+                            "group": o.case.group,
+                            "split": o.case.split,
+                            "injury": o.case.injury,
+                            "text": o.case.text,
+                            "signals": o.signals,
+                            "critical": o.critical,
+                            "llm_urgency": o.llm_urgency,
+                        }
+                        for o in outcomes
+                    ],
+                },
                 ensure_ascii=False,
                 indent=2,
             ),
