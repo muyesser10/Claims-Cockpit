@@ -61,6 +61,10 @@ INJURY_GROUP_LABELS = {
     "non_canonical": "kanonik olmayan ifadeler",
     "ascii_fold": "Türkçe karakteri düşmüş ifadeler",
 }
+SPLIT_LABELS = {
+    "holdout": "dokunulmamış vakalar (dürüst sayı)",
+    "tune": "ayarlama yapılan vakalar",
+}
 
 
 @dataclass(frozen=True)
@@ -319,34 +323,60 @@ def critical_recall_metric(path: Path, *, measured_at: str | None = None) -> Met
     deterministic = sum(1 for row in positives if row.get("signals"))
     false_criticals = sum(1 for row in controls if row.get("critical"))
 
-    groups = sorted({row["group"] for row in positives})
-    breakdown = [
-        # Fixed, not derived: the corpus has 38 injury records and the urgency
-        # phrase caught all 38. It is carried here so the reader can see the
-        # number §7 used to report beside the one that replaced it. Regenerating
-        # the corpus invalidates it - eval/masking_recall.py's holdout split is
-        # the model for measuring this properly, and this row should follow it.
+    def _ratio(rows: list[dict]) -> tuple[int, int]:
+        return sum(1 for row in rows if row.get("critical")), len(rows)
+
+    breakdown: list[Breakdown] = []
+
+    # The two halves first, because they are what the headline has to be read
+    # against. `tune` are the cases the prompt and the dictionary were written
+    # while looking at, `holdout` were written before anything was run against
+    # them, and only the second estimates reach rather than fit. Emitted only
+    # when the run carries the split, so an older file still renders.
+    for split in ("holdout", "tune"):
+        rows = [row for row in positives if row.get("split") == split]
+        if not rows:
+            continue
+        hits, total = _ratio(rows)
+        breakdown.append(
+            Breakdown(
+                label=SPLIT_LABELS[split],
+                value=hits / total,
+                numerator=hits,
+                denominator=total,
+            )
+        )
+
+    breakdown.append(
+        Breakdown(
+            label="deterministik katman (LLM düştüğünde kalan)",
+            value=deterministic / len(positives) if positives else None,
+            numerator=deterministic,
+            denominator=len(positives),
+        )
+    )
+    # Fixed, not derived: the corpus has 38 injury records and the urgency
+    # phrase caught all 38. It is carried here so the reader can see the
+    # number §7 used to report beside the one that replaced it. Regenerating
+    # the corpus invalidates it - eval/masking_recall.py's holdout split is
+    # the model for measuring this properly, and this row should follow it.
+    breakdown.append(
         Breakdown(
             label="korpus kalıbı (kanonik ifadeler)",
             value=1.0,
             numerator=38,
             denominator=38,
-        ),
-        Breakdown(
-            label="deterministik katman, kanonik olmayan",
-            value=deterministic / len(positives) if positives else None,
-            numerator=deterministic,
-            denominator=len(positives),
-        ),
-    ]
-    for group in groups:
+        )
+    )
+    for group in sorted({row["group"] for row in positives}):
         rows = [row for row in positives if row["group"] == group]
+        hits, total = _ratio(rows)
         breakdown.append(
             Breakdown(
                 label=f"pipeline, {INJURY_GROUP_LABELS.get(group, group)}",
-                value=sum(1 for row in rows if row.get("critical")) / len(rows),
-                numerator=sum(1 for row in rows if row.get("critical")),
-                denominator=len(rows),
+                value=hits / total,
+                numerator=hits,
+                denominator=total,
             )
         )
 
@@ -375,11 +405,21 @@ def critical_recall_metric(path: Path, *, measured_at: str | None = None) -> Met
             "bu metrik %100 verir; ama oradaki kritik kayıtların hepsi dört sabit cümleden "
             "birini taşıyor ve dördü de kanonik bir yaralanma terimi içeriyor — yani o %100 "
             "kalıbı ölçüyor, sistemin erişimini değil.",
+            "Manşet iki yarının toplamıdır. Ayarlama yapılan yarıda ölçülen değer sistemin "
+            "erişimini değil kuralların ne kadar iyi yazıldığını söyler; dokunulmamış yarı "
+            "kırılımda ayrı bir satır olarak duruyor ve dürüst tahmin odur.",
             f"Deterministik katman bu ifadelerin {deterministic}/{len(positives)} tanesini "
             "yakalıyor; geri kalanı LLM taşıyor. Sağlayıcı fallback'i olmadığı sürece bu "
             "metrik tek bir servise bağlı.",
             f"Yaralanma içermeyen {len(controls)} kontrol ifadesinin {false_criticals} tanesi "
-            "yanlışlıkla kritik işaretleniyor — recall'ın karşı tarafı.",
+            "yanlışlıkla kritik işaretleniyor — recall'ın karşı tarafı. Beşi de deterministik "
+            "katmandan geliyor; model tek bir yanlış kritik üretmedi.",
+            f"Prompt: {meta.get('prompt', 'bilinmiyor')}, seed {meta.get('seed', '—')}, "
+            f"{meta.get('tier', '—')} kademe. Aynı seed'le iki koşu 70 vakanın 1'inde ayrıştı, "
+            "yani dokunulmamış yarıda bir puan gürültünün içindedir.",
+            "Bilinen kaçak: 'Üç gün yoğun bakımda kaldı' — setteki en ağır ifade, model "
+            "alıntı bile önermiyor. Bilerek düzeltilmedi: dokunulmamış yarıya karşı ayar "
+            "yapmak o yarıyı dokunulmuş hale getirir.",
         ],
     )
 

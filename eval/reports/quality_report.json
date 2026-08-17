@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-08-09T11:57:11.496513+00:00",
+  "generated_at": "2026-08-17T11:53:35.819629+00:00",
   "summary": {
     "total": 8,
     "passed": 6,
@@ -151,23 +151,41 @@
     {
       "key": "critical_recall",
       "label": "Kritik aciliyet recall",
-      "value": 0.7894736842105263,
+      "value": 0.8636363636363636,
       "unit": "ratio",
       "target": 0.97,
       "target_operator": "gte",
       "sample": {
-        "n": 19,
+        "n": 44,
         "unit": "ifade",
         "description": "korpusta bulunmayan yaralanma ifadeleri (elle yazılmış fixture)"
       },
       "source": {
         "run": "injury_recall.json",
-        "measured_at": "2026-08-09",
+        "measured_at": "2026-08-17",
         "model": null
       },
-      "numerator": 15,
-      "denominator": 19,
+      "numerator": 38,
+      "denominator": 44,
       "breakdown": [
+        {
+          "label": "dokunulmamış vakalar (dürüst sayı)",
+          "value": 0.84,
+          "numerator": 21,
+          "denominator": 25
+        },
+        {
+          "label": "ayarlama yapılan vakalar",
+          "value": 0.8947368421052632,
+          "numerator": 17,
+          "denominator": 19
+        },
+        {
+          "label": "deterministik katman (LLM düştüğünde kalan)",
+          "value": 0.20454545454545456,
+          "numerator": 9,
+          "denominator": 44
+        },
         {
           "label": "korpus kalıbı (kanonik ifadeler)",
           "value": 1.0,
@@ -175,28 +193,25 @@
           "denominator": 38
         },
         {
-          "label": "deterministik katman, kanonik olmayan",
-          "value": 0.21052631578947367,
-          "numerator": 4,
-          "denominator": 19
-        },
-        {
           "label": "pipeline, Türkçe karakteri düşmüş ifadeler",
           "value": 1.0,
-          "numerator": 5,
-          "denominator": 5
+          "numerator": 9,
+          "denominator": 9
         },
         {
           "label": "pipeline, kanonik olmayan ifadeler",
-          "value": 0.7142857142857143,
-          "numerator": 10,
-          "denominator": 14
+          "value": 0.8285714285714286,
+          "numerator": 29,
+          "denominator": 35
         }
       ],
       "notes": [
         "Manşet sayı korpusun değil, fixture'ın sayısıdır. Korpus üzerinden ölçüldüğünde bu metrik %100 verir; ama oradaki kritik kayıtların hepsi dört sabit cümleden birini taşıyor ve dördü de kanonik bir yaralanma terimi içeriyor — yani o %100 kalıbı ölçüyor, sistemin erişimini değil.",
-        "Deterministik katman bu ifadelerin 4/19 tanesini yakalıyor; geri kalanı LLM taşıyor. Sağlayıcı fallback'i olmadığı sürece bu metrik tek bir servise bağlı.",
-        "Yaralanma içermeyen 15 kontrol ifadesinin 5 tanesi yanlışlıkla kritik işaretleniyor — recall'ın karşı tarafı."
+        "Manşet iki yarının toplamıdır. Ayarlama yapılan yarıda ölçülen değer sistemin erişimini değil kuralların ne kadar iyi yazıldığını söyler; dokunulmamış yarı kırılımda ayrı bir satır olarak duruyor ve dürüst tahmin odur.",
+        "Deterministik katman bu ifadelerin 9/44 tanesini yakalıyor; geri kalanı LLM taşıyor. Sağlayıcı fallback'i olmadığı sürece bu metrik tek bir servise bağlı.",
+        "Yaralanma içermeyen 26 kontrol ifadesinin 5 tanesi yanlışlıkla kritik işaretleniyor — recall'ın karşı tarafı. Beşi de deterministik katmandan geliyor; model tek bir yanlış kritik üretmedi.",
+        "Prompt: classification_v3.txt, seed 42, cheap kademe. Aynı seed'le iki koşu 70 vakanın 1'inde ayrıştı, yani dokunulmamış yarıda bir puan gürültünün içindedir.",
+        "Bilinen kaçak: 'Üç gün yoğun bakımda kaldı' — setteki en ağır ifade, model alıntı bile önermiyor. Bilerek düzeltilmedi: dokunulmamış yarıya karşı ayar yapmak o yarıyı dokunulmuş hale getirir."
       ],
       "status": "fail"
     },
