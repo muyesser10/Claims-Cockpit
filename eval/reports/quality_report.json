@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-08-18T10:31:47.400714+00:00",
+  "generated_at": "2026-08-18T11:33:11.924265+00:00",
   "summary": {
     "total": 9,
     "passed": 7,
@@ -143,6 +143,7 @@
       "breakdown": [],
       "notes": [
         "Kapsam %71,0 — 71/100 ihbar kapıdan geçti.",
+        "DİKKAT — bu koşu maskeleme sanity bayrağını ölçmedi ve `has_sanity_flags=False` varsaydı. Kapı o bayrağı sabit ret sayıyor ve bayrak 2026-08-17'de gerçek veritabanında 150 claim'in 148'inde çıktı. Yani buradaki kapsam, kapının bugün açılsa üreteceği kapsam DEĞİL; diğer kuralların tek başına ne başardığını gösteren karşı-olgusal bir sayıdır. Gerçek kapsam ~%1'dir.",
         "Tek taraflı %95 güven alt sınırı %91,4. Örneklem bu genişlikte olduğu sürece hedefin sağlandığı istatistiksel olarak gösterilemez, sadece ölçülür.",
         "Yanlış onaylananlar: GT-000094, GT-000325. Bunlardan counterparty_exists kaynaklı olanlar bilinen ground truth kusurudur (data/gt_generator.py etiketi metinden türetmiyor), gerçek model hatası değildir."
       ],

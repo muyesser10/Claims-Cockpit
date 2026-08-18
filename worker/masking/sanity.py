@@ -28,7 +28,7 @@ from worker.llm.client import LlmClient, ModelTier, get_llm_client
 
 logger = logging.getLogger("worker.masking.sanity")
 
-PROMPT_PATH = Path(__file__).resolve().parents[2] / "prompts" / "masking_sanity_v1.txt"
+PROMPT_PATH = Path(__file__).resolve().parents[2] / "prompts" / "masking_sanity_v2.txt"
 
 # Read once: the prompt is static and identical for every message.
 SANITY_PROMPT = PROMPT_PATH.read_text(encoding="utf-8")
@@ -108,6 +108,7 @@ def check_sanity(
     client: LlmClient | None = None,
     tier: ModelTier = ModelTier.CHEAP,
     seed: int | None = None,
+    system_prompt: str | None = None,
 ) -> SanityCheckResult:
     """Ask the model whether `masked_text` still shows any PII.
 
@@ -124,6 +125,11 @@ def check_sanity(
     `seed` follows the same pattern as worker/extraction/extractor.py's
     extract(): unset for the live pipeline, pinned by eval runs that need
     week-to-week comparability.
+
+    `system_prompt` defaults to the versioned file. Overriding it lets eval
+    compare prompt variants on one sample; the pipeline never passes it. Every
+    other call site in the repo already had this seam - this one did not, which
+    is why the layer's behaviour had never been A/B tested.
 
     Fails closed: if anything raises — building the client (e.g. a missing
     OPENAI_API_KEY) or the LLM call itself — the result comes back as
@@ -154,7 +160,7 @@ def check_sanity(
         result = client.structured(
             tier=tier,
             response_model=SanityCheckResult,
-            system_prompt=SANITY_PROMPT,
+            system_prompt=system_prompt or SANITY_PROMPT,
             user_content=masked_text,
             message_id=message_id,
             seed=seed,

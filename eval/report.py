@@ -253,11 +253,20 @@ def gate_metrics(path: Path) -> list[Metric]:
     urgency = classification.build_report(records, "urgency")
     shipped = gate.measure(records)
     bound = binomial_lower_bound(shipped.correct, shipped.approved)
+    sanity_measured = any(item.has_sanity_flags is not None for item in records)
 
     precision_notes = [
         f"Kapsam {_pct(shipped.coverage)} — {shipped.approved}/{shipped.total} ihbar "
         "kapıdan geçti.",
     ]
+    if not sanity_measured:
+        precision_notes.append(
+            "DİKKAT — bu koşu maskeleme sanity bayrağını ölçmedi ve `has_sanity_flags=False` "
+            "varsaydı. Kapı o bayrağı sabit ret sayıyor ve bayrak 2026-08-17'de gerçek "
+            "veritabanında 150 claim'in 148'inde çıktı. Yani buradaki kapsam, kapının "
+            "bugün açılsa üreteceği kapsam DEĞİL; diğer kuralların tek başına ne "
+            "başardığını gösteren karşı-olgusal bir sayıdır. Gerçek kapsam ~%1'dir."
+        )
     if bound is not None:
         precision_notes.append(
             f"Tek taraflı %95 güven alt sınırı {_pct(bound)}. Örneklem bu genişlikte olduğu "

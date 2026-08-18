@@ -34,6 +34,7 @@ from worker.extraction.extractor import PROMPT_PATH as EXTRACTION_PROMPT_PATH
 from worker.extraction.extractor import extract
 from worker.llm.client import LlmClient, ModelTier
 from worker.masking.pipeline import mask_all
+from worker.masking.sanity import check_sanity
 from worker.masking.unmask import unmask_data
 from worker.routing.auto_approve import ADVISORY_RULES, evaluate
 from worker.validation.validator import validate
@@ -59,6 +60,11 @@ class GateRecord:
     # Every compared field matched the answer key. The bar for a claim nobody
     # will read.
     correct: bool
+    # Whether the masking sanity pass flagged this record. None means the run
+    # never measured it - which is what every run before 2026-08-17 did, while
+    # measure() quietly assumed False. Measured 2026-08-17: the pass flags 148
+    # of 150 real claims, so that assumption described almost no claim.
+    has_sanity_flags: bool | None = None
     # What the answer key said, kept for the classification report and so a
     # disagreement can be looked at rather than guessed at.
     expected_content_type: str | None = None
@@ -115,6 +121,7 @@ def build_record(
     client: LlmClient,
     tier: ModelTier = ModelTier.CHEAP,
     seed: int | None = None,
+    measure_sanity: bool = True,
 ) -> GateRecord:
     """Run one record through the pipeline's steps and reduce it to a GateRecord.
 
@@ -123,6 +130,15 @@ def build_record(
     an extraction it would never have had.
     """
     masked_text, mappings = mask_all(record.text)
+
+    # The pipeline runs this between masking and classification, and the gate
+    # treats its flag as a fixed reject - so a gate measurement that skips it
+    # measures a gate nobody runs.
+    sanity_flagged = None
+    if measure_sanity:
+        sanity_flagged = check_sanity(
+            masked_text, message_id=record.gt_id, client=client, tier=tier, seed=seed
+        ).leak_found
 
     classification = classify(
         masked_text,
@@ -146,6 +162,7 @@ def build_record(
             validation_flags=[],
             unverified_fields=[],
             extraction_present=False,
+            has_sanity_flags=sanity_flagged,
             correct=False,
             expected_content_type=expected.get("content_type"),
             expected_urgency=expected.get("urgency"),
@@ -184,6 +201,7 @@ def build_record(
         validation_flags=flags,
         unverified_fields=result.unverified_fields,
         extraction_present=True,
+        has_sanity_flags=sanity_flagged,
         correct=bool(scored) and all(item.hit for item in scored),
         expected_content_type=expected.get("content_type"),
         expected_urgency=expected.get("urgency"),
@@ -198,6 +216,7 @@ def run_live(
     client: LlmClient | None = None,
     tier: ModelTier = ModelTier.CHEAP,
     seed: int | None = None,
+    measure_sanity: bool = True,
     on_progress: Callable[[int, int, str], None] | None = None,
 ) -> GateRunOutcome:
     """Build a GateRecord for every record, keeping going when one fails.
@@ -211,7 +230,15 @@ def run_live(
 
     for index, record in enumerate(records, start=1):
         try:
-            outcome.records.append(build_record(record, client=client, tier=tier, seed=seed))
+            outcome.records.append(
+                build_record(
+                    record,
+                    client=client,
+                    tier=tier,
+                    seed=seed,
+                    measure_sanity=measure_sanity,
+                )
+            )
         except Exception as exc:  # noqa: BLE001 - recorded, not swallowed
             outcome.failures.append((record.gt_id, f"{type(exc).__name__}: {exc}"))
         if on_progress is not None:
@@ -225,12 +252,19 @@ def measure(
     *,
     label: str = "shipped",
     advisory_rules: frozenset[str] = ADVISORY_RULES,
+    ignore_sanity: bool = False,
 ) -> GateMeasurement:
     """Apply one advisory set to a finished run.
 
     `enabled=True` is forced. The environment flag says whether the gate is
     switched on in production; it has nothing to say about what the gate would
     achieve, which is the whole question here.
+
+    `ignore_sanity` forces the masking-sanity flag off. It answers a different
+    question - what the remaining rules achieve on their own - and is the only
+    honest way to read a run made before the flag was measured. It is never the
+    production number: the pass flags 148 of 150 real claims, so a gate that
+    respects it approves almost nothing.
     """
     approved_ids: list[str] = []
     wrong_ids: list[str] = []
@@ -242,7 +276,9 @@ def measure(
             urgency=item.urgency,
             validation_flags=item.validation_flags,
             unverified_fields=item.unverified_fields,
-            has_sanity_flags=False,
+            has_sanity_flags=(
+                False if ignore_sanity or item.has_sanity_flags is None else item.has_sanity_flags
+            ),
             extraction_present=item.extraction_present,
             enabled=True,
             advisory_rules=advisory_rules,
