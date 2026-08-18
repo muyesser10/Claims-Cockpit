@@ -201,7 +201,8 @@ def format_report(outcomes: list[Outcome], *, live: bool) -> str:
     controls = by_group["false_positive_control"]
     lines.append("=" * 72)
 
-    for split in ("tune", "holdout", None):
+    splits = sorted({o.case.split for o in outcomes})
+    for split in (*splits, None):
         positives = [o for o in hard if split is None or o.case.split == split]
         negatives = [o for o in controls if split is None or o.case.split == split]
         if not positives and not negatives:
@@ -248,14 +249,18 @@ def main(argv: list[str] | None = None) -> int:
         help="classification prompt to use instead of the one classifier.py reads",
     )
     parser.add_argument(
-        "--split", choices=("tune", "holdout"), default=None, help="only one half of the fixture"
+        "--split",
+        default=None,
+        help="comma-separated splits to run (tune / holdout / holdout2). A blind split "
+        "must be excludable, or a run meant to leave it alone still prints its score.",
     )
     parser.add_argument("--out", type=Path, default=None, help="write raw outcomes as JSON")
     args = parser.parse_args(argv)
 
     cases = load_cases()
     if args.split:
-        cases = [case for case in cases if case.split == args.split]
+        wanted = {name.strip() for name in args.split.split(",")}
+        cases = [case for case in cases if case.split in wanted]
     if args.live:
         print(f"about to call the model for {len(cases)} cases", file=sys.stderr)
 

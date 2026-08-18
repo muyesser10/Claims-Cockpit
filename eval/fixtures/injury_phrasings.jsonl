@@ -68,3 +68,29 @@
 {"id": "IP-H34", "group": "false_positive_control", "injury": false, "channel": "email", "text": "Sağlık ocağının duvarına çarptım.", "note": "sağlık kurumu çarpılan nesne", "split": "holdout"}
 {"id": "IP-H35", "group": "false_positive_control", "injury": false, "channel": "call_transcript", "text": "Müşteri: Kırık dökük bir araçtı zaten.", "note": "'kırık dökük' deyimi", "split": "holdout"}
 {"id": "IP-H36", "group": "false_positive_control", "injury": false, "channel": "email", "text": "Ambulans şoförü ile tartıştık, kaza tutanağı tuttuk.", "note": "ambulans çıplak + isim tamlaması", "split": "holdout"}
+{"id": "IP-K01", "group": "non_canonical", "injury": true, "channel": "email", "text": "Doktor 15 gün istirahat verdi.", "note": "istirahat raporu", "split": "holdout2"}
+{"id": "IP-K02", "group": "non_canonical", "injury": true, "channel": "web_form", "text": "Açıklama: Sağlık raporu aldım, işe gidemiyorum.", "note": "saglik raporu", "split": "holdout2"}
+{"id": "IP-K03", "group": "non_canonical", "injury": true, "channel": "call_transcript", "text": "Müşteri: Ameliyathaneye aldılar.", "note": "ameliyathane", "split": "holdout2"}
+{"id": "IP-K04", "group": "non_canonical", "injury": true, "channel": "email", "text": "Serum bağladılar, birkaç saat gözlemde tuttular.", "note": "serum + gozlem", "split": "holdout2"}
+{"id": "IP-K05", "group": "non_canonical", "injury": true, "channel": "email", "text": "Dikişlerim dün alındı.", "note": "dikis, dolayli", "split": "holdout2"}
+{"id": "IP-K06", "group": "non_canonical", "injury": true, "channel": "call_transcript", "text": "Müşteri: Hastaneden dün taburcu oldum.", "note": "taburcu", "split": "holdout2"}
+{"id": "IP-K07", "group": "non_canonical", "injury": true, "channel": "email", "text": "MR sonucunu bekliyoruz.", "note": "tetkik", "split": "holdout2"}
+{"id": "IP-K08", "group": "non_canonical", "injury": true, "channel": "web_form", "text": "Açıklama: Boynuma korse taktılar.", "note": "korse", "split": "holdout2"}
+{"id": "IP-K09", "group": "non_canonical", "injury": true, "channel": "call_transcript", "text": "Müşteri: Acile kaldırıldım.", "note": "acile kaldirilma", "split": "holdout2"}
+{"id": "IP-K10", "group": "non_canonical", "injury": true, "channel": "email", "text": "112 çağrıldı, olay yerinde müdahale ettiler.", "note": "112", "split": "holdout2"}
+{"id": "IP-K11", "group": "non_canonical", "injury": true, "channel": "email", "text": "Beyin tomografisi çekildi.", "note": "tomografi", "split": "holdout2"}
+{"id": "IP-K12", "group": "non_canonical", "injury": true, "channel": "call_transcript", "text": "Müşteri: Yoğun bakıma alındı.", "note": "yogun bakim", "split": "holdout2"}
+{"id": "IP-K13", "group": "non_canonical", "injury": true, "channel": "web_form", "text": "Açıklama: Ayağıma alçı yapıldı.", "note": "alci", "split": "holdout2"}
+{"id": "IP-K14", "group": "non_canonical", "injury": true, "channel": "email", "text": "Tedavim hâlâ sürüyor.", "note": "tedavi, cok dolayli", "split": "holdout2"}
+{"id": "IP-K15", "group": "non_canonical", "injury": true, "channel": "call_transcript", "text": "Müşteri: Ağrı kesici verip eve gönderdiler.", "note": "hafif vaka", "split": "holdout2"}
+{"id": "IP-K16", "group": "non_canonical", "injury": true, "channel": "email", "text": "Sedyeyle taşındım.", "note": "sedye + tasi; A1 kurali tasi-yi haric tutuyor", "split": "holdout2"}
+{"id": "IP-K17", "group": "non_canonical", "injury": true, "channel": "email", "text": "Fizyoterapiye başladım.", "note": "fizyoterapi", "split": "holdout2"}
+{"id": "IP-K18", "group": "non_canonical", "injury": true, "channel": "web_form", "text": "Açıklama: Kaburgalarımda ezilme var, nefes almak zor.", "note": "ezilme", "split": "holdout2"}
+{"id": "IP-K19", "group": "false_positive_control", "injury": false, "channel": "email", "text": "Sağlık raporumu poliçe için istediler, hasarla ilgisi yok.", "note": "rapor ama yaralanma yok", "split": "holdout2"}
+{"id": "IP-K20", "group": "false_positive_control", "injury": false, "channel": "email", "text": "Hastane yolundaki kasise girdik, jant zarar gördü.", "note": "hastane yolu", "split": "holdout2"}
+{"id": "IP-K21", "group": "false_positive_control", "injury": false, "channel": "email", "text": "Fizik tedavi merkezinin otoparkında aracı çizmişler.", "note": "fizik tedavi merkezi = yer", "split": "holdout2"}
+{"id": "IP-K22", "group": "false_positive_control", "injury": false, "channel": "call_transcript", "text": "Müşteri: Yoğun bakım ünitesi girişine park etmiştim, çekici çekmiş.", "note": "yogun bakim = yer", "split": "holdout2"}
+{"id": "IP-K23", "group": "false_positive_control", "injury": false, "channel": "email", "text": "Tomografi cihazı taşıyan tıra arkadan çarptım.", "note": "tomografi = tasinan yuk", "split": "holdout2"}
+{"id": "IP-K24", "group": "false_positive_control", "injury": false, "channel": "email", "text": "112 acil yolu levhasını devirdim.", "note": "112 = levha", "split": "holdout2"}
+{"id": "IP-K25", "group": "false_positive_control", "injury": false, "channel": "web_form", "text": "Açıklama: Kimseye bir şey olmadı, sadece maddi hasar var.", "note": "acik olumsuzlama", "split": "holdout2"}
+{"id": "IP-K26", "group": "false_positive_control", "injury": false, "channel": "email", "text": "Doktor arkadaşımın aracına çarptım.", "note": "doktor = kisi ama yaralanma yok", "split": "holdout2"}
