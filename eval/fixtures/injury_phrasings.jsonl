@@ -94,3 +94,25 @@
 {"id": "IP-K24", "group": "false_positive_control", "injury": false, "channel": "email", "text": "112 acil yolu levhasını devirdim.", "note": "112 = levha", "split": "holdout2"}
 {"id": "IP-K25", "group": "false_positive_control", "injury": false, "channel": "web_form", "text": "Açıklama: Kimseye bir şey olmadı, sadece maddi hasar var.", "note": "acik olumsuzlama", "split": "holdout2"}
 {"id": "IP-K26", "group": "false_positive_control", "injury": false, "channel": "email", "text": "Doktor arkadaşımın aracına çarptım.", "note": "doktor = kisi ama yaralanma yok", "split": "holdout2"}
+{"id": "IP-M01", "group": "non_canonical", "injury": true, "channel": "email", "text": "Omurgamdan ameliyata alındılar.", "note": "ameliyat, cekimli", "split": "holdout3"}
+{"id": "IP-M02", "group": "non_canonical", "injury": true, "channel": "call_transcript", "text": "Müşteri: Tomografiye soktular.", "note": "tomografi, cekimli", "split": "holdout3"}
+{"id": "IP-M03", "group": "non_canonical", "injury": true, "channel": "web_form", "text": "Açıklama: Röntgenimi çektiler.", "note": "rontgen, cekimli", "split": "holdout3"}
+{"id": "IP-M04", "group": "non_canonical", "injury": true, "channel": "email", "text": "Tedavime geçen hafta başladık.", "note": "tedavi, cekimli", "split": "holdout3"}
+{"id": "IP-M05", "group": "non_canonical", "injury": true, "channel": "call_transcript", "text": "Müşteri: Yoğun bakımdan yeni çıktı.", "note": "yogun bakim, cekimli", "split": "holdout3"}
+{"id": "IP-M06", "group": "non_canonical", "injury": true, "channel": "email", "text": "Dikişlerimi aldırmaya gideceğim.", "note": "dikis, cekimli", "split": "holdout3"}
+{"id": "IP-M07", "group": "non_canonical", "injury": true, "channel": "email", "text": "Fizyoterapimi sürdürüyorum.", "note": "fizyoterapi, cekimli", "split": "holdout3"}
+{"id": "IP-M08", "group": "non_canonical", "injury": true, "channel": "web_form", "text": "Açıklama: Korsemi çıkarmama izin vermediler.", "note": "korse, cekimli", "split": "holdout3"}
+{"id": "IP-M09", "group": "non_canonical", "injury": true, "channel": "email", "text": "Ameliyat oldum, iki hafta işe gidemedim.", "note": "ciplak + ol-", "split": "holdout3"}
+{"id": "IP-M10", "group": "non_canonical", "injury": true, "channel": "call_transcript", "text": "Müşteri: Tedavi gördüm.", "note": "ciplak + gor-", "split": "holdout3"}
+{"id": "IP-M11", "group": "non_canonical", "injury": true, "channel": "email", "text": "Doktor istirahat verdi.", "note": "ciplak + ver-", "split": "holdout3"}
+{"id": "IP-M12", "group": "non_canonical", "injury": true, "channel": "web_form", "text": "Açıklama: Ağrı kesici yazdılar.", "note": "ciplak + yaz-", "split": "holdout3"}
+{"id": "IP-M13", "group": "non_canonical", "injury": true, "channel": "email", "text": "Röntgen çektirdim.", "note": "ciplak + cektir-", "split": "holdout3"}
+{"id": "IP-M14", "group": "non_canonical", "injury": true, "channel": "call_transcript", "text": "Müşteri: Serum taktılar.", "note": "ciplak + tak-", "split": "holdout3"}
+{"id": "IP-M15", "group": "false_positive_control", "injury": false, "channel": "email", "text": "Ameliyathane girişindeki bariyere çarptım.", "note": "ameliyathane = yer", "split": "holdout3"}
+{"id": "IP-M16", "group": "false_positive_control", "injury": false, "channel": "email", "text": "Tomografi merkezinin önünde park halindeydi.", "note": "tomografi merkezi = yer", "split": "holdout3"}
+{"id": "IP-M17", "group": "false_positive_control", "injury": false, "channel": "call_transcript", "text": "Müşteri: Röntgen kliniği tabelası aracın üstüne düştü.", "note": "rontgen klinigi = yer", "split": "holdout3"}
+{"id": "IP-M18", "group": "false_positive_control", "injury": false, "channel": "email", "text": "Tedavi kurumu servis aracına çarptım.", "note": "tedavi kurumu = kurum", "split": "holdout3"}
+{"id": "IP-M19", "group": "false_positive_control", "injury": false, "channel": "web_form", "text": "Açıklama: Yoğun bakım tabelasına sürttüm.", "note": "yogun bakim = tabela", "split": "holdout3"}
+{"id": "IP-M20", "group": "false_positive_control", "injury": false, "channel": "email", "text": "Fizyoterapi salonunun camını kırdım.", "note": "fizyoterapi salonu = yer", "split": "holdout3"}
+{"id": "IP-M21", "group": "false_positive_control", "injury": false, "channel": "email", "text": "Korse satan dükkânın önünde çizdiler.", "note": "korse dukkani = yer", "split": "holdout3"}
+{"id": "IP-M22", "group": "false_positive_control", "injury": false, "channel": "call_transcript", "text": "Müşteri: Serum fizyolojik kutusu devrildi, hasar yok.", "note": "serum = urun", "split": "holdout3"}

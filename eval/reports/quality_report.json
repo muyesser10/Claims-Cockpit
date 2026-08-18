@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-08-18T11:33:11.924265+00:00",
+  "generated_at": "2026-08-18T12:38:19.916657+00:00",
   "summary": {
     "total": 9,
     "passed": 7,
@@ -199,27 +199,39 @@
     {
       "key": "critical_recall",
       "label": "Kritik aciliyet recall",
-      "value": 0.8636363636363636,
+      "value": 0.7894736842105263,
       "unit": "ratio",
       "target": 0.97,
       "target_operator": "gte",
       "sample": {
-        "n": 44,
+        "n": 76,
         "unit": "ifade",
         "description": "korpusta bulunmayan yaralanma ifadeleri (elle yazılmış fixture)"
       },
       "source": {
         "run": "injury_recall.json",
-        "measured_at": "2026-08-17",
+        "measured_at": "2026-08-18",
         "model": null
       },
-      "numerator": 38,
-      "denominator": 44,
+      "numerator": 60,
+      "denominator": 76,
       "breakdown": [
         {
-          "label": "dokunulmamış vakalar (dürüst sayı)",
-          "value": 0.84,
-          "numerator": 21,
+          "label": "kör set — tıbbi süreç ailesi (hiç ayar yapılmadı)",
+          "value": 0.5714285714285714,
+          "numerator": 8,
+          "denominator": 14
+        },
+        {
+          "label": "tıbbi süreç ailesi (aday seçiminde kullanıldı)",
+          "value": 0.6666666666666666,
+          "numerator": 12,
+          "denominator": 18
+        },
+        {
+          "label": "dokunulmamış vakalar (sonradan iterasyon gördü)",
+          "value": 0.92,
+          "numerator": 23,
           "denominator": 25
         },
         {
@@ -230,9 +242,9 @@
         },
         {
           "label": "deterministik katman (LLM düştüğünde kalan)",
-          "value": 0.20454545454545456,
-          "numerator": 9,
-          "denominator": 44
+          "value": 0.35526315789473684,
+          "numerator": 27,
+          "denominator": 76
         },
         {
           "label": "korpus kalıbı (kanonik ifadeler)",
@@ -248,18 +260,19 @@
         },
         {
           "label": "pipeline, kanonik olmayan ifadeler",
-          "value": 0.8285714285714286,
-          "numerator": 29,
-          "denominator": 35
+          "value": 0.7611940298507462,
+          "numerator": 51,
+          "denominator": 67
         }
       ],
       "notes": [
         "Manşet sayı korpusun değil, fixture'ın sayısıdır. Korpus üzerinden ölçüldüğünde bu metrik %100 verir; ama oradaki kritik kayıtların hepsi dört sabit cümleden birini taşıyor ve dördü de kanonik bir yaralanma terimi içeriyor — yani o %100 kalıbı ölçüyor, sistemin erişimini değil.",
         "Manşet iki yarının toplamıdır. Ayarlama yapılan yarıda ölçülen değer sistemin erişimini değil kuralların ne kadar iyi yazıldığını söyler; dokunulmamış yarı kırılımda ayrı bir satır olarak duruyor ve dürüst tahmin odur.",
-        "Deterministik katman bu ifadelerin 9/44 tanesini yakalıyor; geri kalanı LLM taşıyor. Sağlayıcı fallback'i olmadığı sürece bu metrik tek bir servise bağlı.",
-        "Yaralanma içermeyen 26 kontrol ifadesinin 5 tanesi yanlışlıkla kritik işaretleniyor — recall'ın karşı tarafı. Beşi de deterministik katmandan geliyor; model tek bir yanlış kritik üretmedi.",
+        "Deterministik katman bu ifadelerin 27/76 tanesini yakalıyor; geri kalanı LLM taşıyor. Sağlayıcı fallback'i olmadığı sürece bu metrik tek bir servise bağlı.",
+        "Yaralanma içermeyen 42 kontrol ifadesinin 6 tanesi yanlışlıkla kritik işaretleniyor — recall'ın karşı tarafı. Beşi de deterministik katmandan geliyor; model tek bir yanlış kritik üretmedi.",
         "Prompt: classification_v3.txt, seed 42, cheap kademe. Aynı seed'le iki koşu 70 vakanın 1'inde ayrıştı, yani dokunulmamış yarıda bir puan gürültünün içindedir.",
-        "Bilinen kaçak: 'Üç gün yoğun bakımda kaldı' — setteki en ağır ifade, model alıntı bile önermiyor. Bilerek düzeltilmedi: dokunulmamış yarıya karşı ayar yapmak o yarıyı dokunulmuş hale getirir."
+        "Kalan kaçakların tamamı tek bir dilbilgisi şekli: ÇIPLAK isim + yardımcı fiil ('ameliyat oldum', 'korse taktılar', 'röntgen çektirdim'). Türkçe bu yapıda ismi eksiz bırakır, dolayısıyla 'ameliyathane girişi' gibi bir tamlamadan ayırt edilemiyor. Çekimli yarı (2026-08-18'de eklendi) yakalanıyor; bu yarı için sonraki aday, kendi kör setini ister.",
+        "Model bu ailede sıfır katkı veriyor: kör sette (holdout3) yakalanan 8 vakanın 8'i de deterministik katmandan, 'LLM düşerse kaybedilen' 0. Üç prompt versiyonu denendi (v2/v3/v4), kör performans hepsinde ~%44'te kaldı."
       ],
       "status": "fail"
     },

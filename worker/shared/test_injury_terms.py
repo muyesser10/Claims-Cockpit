@@ -9,11 +9,22 @@ Recall is the number that must not move.
 
 import pytest
 
-from worker.shared.injury_terms import INJURY_TERMS, _normalize_tr, find_injury_signals
+from worker.shared.injury_terms import (
+    CONTEXT_TERMS,
+    INJURY_TERMS,
+    _normalize_tr,
+    find_injury_signals,
+)
 
 
 def test_injury_terms_contains_expected_words():
-    assert set(INJURY_TERMS) == {
+    """Two groups: words for harm, and words for the care that follows it.
+
+    The second group only works because CONTEXT_TERMS qualifies it - bare they
+    are compound modifiers ("yoğun bakım ünitesi"), inflected they are a person
+    being treated ("yoğun bakıma alındı").
+    """
+    harm = {
         "yaralı",
         "yaralanma",
         "yaralandı",
@@ -21,17 +32,36 @@ def test_injury_terms_contains_expected_words():
         "kanama",
         "kanıyor",
         "kan kayb",
-        "hastane",
-        "ambulans",
         "ölü",
         "ölüm",
-        "sedye",
         "kırık",
         "bilinç kayb",
         "bilinci kapalı",
         "bilinçsiz",
-        "acil servis",
     }
+    care = {
+        "hastane",
+        "ambulans",
+        "sedye",
+        "acil servis",
+        "ameliyat",
+        "tomografi",
+        "röntgen",
+        "fizyoterapi",
+        "yoğun bakım",
+        "tedavi",
+        "taburcu",
+        "korse",
+        "serum",
+        "pansuman",
+        "dikiş",
+        "istirahat",
+        "iş göremezlik",
+        "ağrı kesici",
+    }
+
+    assert set(INJURY_TERMS) == harm | care
+    assert CONTEXT_TERMS == care
 
 
 def test_a_term_that_is_only_the_first_syllable_of_another_word_does_not_signal():
@@ -200,3 +230,55 @@ def test_every_matching_term_is_reported_once():
 
 def test_clean_text_yields_nothing():
     assert find_injury_signals("aracımın camı çatladı, park halindeydi") == []
+
+
+# --- the care family, added 2026-08-17 -------------------------------------
+# Three prompt versions failed to reach these; blind recall sat near 44% for all
+# of them. Grammar reaches the inflected half.
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Omurgamdan ameliyata alındılar.",
+        "Tomografiye soktular.",
+        "Röntgenimi çektiler.",
+        "Tedavime geçen hafta başladık.",
+        "Yoğun bakımdan yeni çıktı.",
+        "Dikişlerimi aldırmaya gideceğim.",
+    ],
+)
+def test_an_inflected_care_word_is_a_person_being_treated(text):
+    assert find_injury_signals(text)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Tomografi merkezinin önünde park halindeydi.",
+        "Yoğun bakım tabelasına sürttüm.",
+        "Fizyoterapi salonunun camını kırdım.",
+        "Tedavi kurumu servis aracına çarptım.",
+        "Serum fizyolojik kutusu devrildi, hasar yok.",
+    ],
+)
+def test_a_bare_care_word_modifying_a_noun_is_a_place(text):
+    assert find_injury_signals(text) == []
+
+
+def test_the_possessive_suffix_is_not_the_question_particle():
+    """Turkish writes the question particle apart ("korse mi?") and the suffix
+    attached ("korsemi"). Reading the second as the first threw the signal away.
+    """
+    assert find_injury_signals("Korsemi çıkarmama izin vermediler.")
+    assert find_injury_signals("Fizyoterapimi sürdürüyorum.")
+    # The guard still has to do its job on a real question.
+    assert find_injury_signals("Ajan: Aracınızda yaralanan var mı?") == []
+
+
+def test_the_light_verb_half_of_the_family_is_a_known_miss():
+    """ "ameliyat oldum", "tedavi gördüm" leave the noun bare, so the rule cannot
+    tell them from "ameliyathane girişi". Recorded rather than hidden: it is
+    half of holdout3 and the reason the number there is 8/14, not 14/14."""
+    assert find_injury_signals("Ameliyat oldum, iki hafta işe gidemedim.") == []
+    assert find_injury_signals("Müşteri: Tedavi gördüm.") == []

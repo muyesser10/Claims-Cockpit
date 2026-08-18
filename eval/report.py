@@ -70,8 +70,13 @@ INJURY_GROUP_LABELS = {
     "non_canonical": "kanonik olmayan ifadeler",
     "ascii_fold": "Türkçe karakteri düşmüş ifadeler",
 }
+# Ordered hardest-earned first: holdout3 is the only split nothing has been
+# tuned against, holdout2 was spent choosing between two prompts, and holdout
+# has been iterated on since the injury work began.
 SPLIT_LABELS = {
-    "holdout": "dokunulmamış vakalar (dürüst sayı)",
+    "holdout3": "kör set — tıbbi süreç ailesi (hiç ayar yapılmadı)",
+    "holdout2": "tıbbi süreç ailesi (aday seçiminde kullanıldı)",
+    "holdout": "dokunulmamış vakalar (sonradan iterasyon gördü)",
     "tune": "ayarlama yapılan vakalar",
 }
 
@@ -439,7 +444,7 @@ def critical_recall_metric(path: Path, *, measured_at: str | None = None) -> Met
     # while looking at, `holdout` were written before anything was run against
     # them, and only the second estimates reach rather than fit. Emitted only
     # when the run carries the split, so an older file still renders.
-    for split in ("holdout", "tune"):
+    for split in SPLIT_LABELS:
         rows = [row for row in positives if row.get("split") == split]
         if not rows:
             continue
@@ -523,9 +528,14 @@ def critical_recall_metric(path: Path, *, measured_at: str | None = None) -> Met
             f"Prompt: {meta.get('prompt', 'bilinmiyor')}, seed {meta.get('seed', '—')}, "
             f"{meta.get('tier', '—')} kademe. Aynı seed'le iki koşu 70 vakanın 1'inde ayrıştı, "
             "yani dokunulmamış yarıda bir puan gürültünün içindedir.",
-            "Bilinen kaçak: 'Üç gün yoğun bakımda kaldı' — setteki en ağır ifade, model "
-            "alıntı bile önermiyor. Bilerek düzeltilmedi: dokunulmamış yarıya karşı ayar "
-            "yapmak o yarıyı dokunulmuş hale getirir.",
+            "Kalan kaçakların tamamı tek bir dilbilgisi şekli: ÇIPLAK isim + yardımcı "
+            "fiil ('ameliyat oldum', 'korse taktılar', 'röntgen çektirdim'). Türkçe bu "
+            "yapıda ismi eksiz bırakır, dolayısıyla 'ameliyathane girişi' gibi bir "
+            "tamlamadan ayırt edilemiyor. Çekimli yarı (2026-08-18'de eklendi) "
+            "yakalanıyor; bu yarı için sonraki aday, kendi kör setini ister.",
+            "Model bu ailede sıfır katkı veriyor: kör sette (holdout3) yakalanan 8 vakanın "
+            "8'i de deterministik katmandan, 'LLM düşerse kaybedilen' 0. Üç prompt "
+            "versiyonu denendi (v2/v3/v4), kör performans hepsinde ~%44'te kaldı.",
         ],
     )
 

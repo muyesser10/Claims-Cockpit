@@ -86,6 +86,31 @@ INJURY_TERMS = (
     "bilinci kapalı",
     "bilinçsiz",
     "acil servis",
+    # Medical process and aftermath. These name what was done for a person
+    # rather than what happened to them, and CONTEXT_TERMS is why they can be
+    # here at all: bare they are compound modifiers ("yoğun bakım ünitesi",
+    # "tomografi cihazı"), inflected they are a person being treated ("yoğun
+    # bakıma alındı", "tomografisi çekildi").
+    #
+    # Added 2026-08-17 after three prompt versions failed to reach this family:
+    # blind recall on it sat near 44% for v2, v3 and v4 alike, on sentences no
+    # person would hesitate over. What the prompt could not learn, grammar can -
+    # for the inflected half of the family. The bare half ("ameliyat oldum",
+    # "tedavi gördüm") stays out of reach and is measured separately.
+    "ameliyat",
+    "tomografi",
+    "röntgen",
+    "fizyoterapi",
+    "yoğun bakım",
+    "tedavi",
+    "taburcu",
+    "korse",
+    "serum",
+    "pansuman",
+    "dikiş",
+    "istirahat",
+    "iş göremezlik",
+    "ağrı kesici",
 )
 
 # Terms are also matched with their Turkish letters folded to ASCII, for text
@@ -115,7 +140,28 @@ NEVER_FOLD_TERMS = frozenset({"ölü", "ölüm"})
 # hand-written cases below do, and there the term is the only evidence:
 #   "ambulans çağırdık"   "hastaneye kaldırıldı"   "eşim acil servise kaldırıldı"
 # So they are kept and qualified instead.
-CONTEXT_TERMS = frozenset({"hastane", "ambulans", "sedye", "acil servis"})
+CONTEXT_TERMS = frozenset(
+    {
+        "hastane",
+        "ambulans",
+        "sedye",
+        "acil servis",
+        "ameliyat",
+        "tomografi",
+        "röntgen",
+        "fizyoterapi",
+        "yoğun bakım",
+        "tedavi",
+        "taburcu",
+        "korse",
+        "serum",
+        "pansuman",
+        "dikiş",
+        "istirahat",
+        "iş göremezlik",
+        "ağrı kesici",
+    }
+)
 
 # A context term qualifies two ways, and both are needed - each covers what the
 # other misses.
@@ -176,7 +222,13 @@ _EMPTY_FIELD = re.compile(r"^\s*:\s*(\n|$)")
 # yaralanan var mı?" - and the term in the question was being read as the
 # customer reporting one. The third category beside negation and the empty
 # label: the text contains the word without asserting the thing.
-_INTERROGATIVE = re.compile(r"^\s*(var\s*mi|var\s*miydi|oldu\s*mu|mi\b|mu\b)")
+# The bare particle needs a space in front of it. Turkish writes the question
+# particle as its own word ("korse mi?") and the possessive/accusative suffix
+# attached ("korsemi"), and the two are the same letters - so a pattern allowing
+# zero spaces read "Korsemi çıkarmama izin vermediler" as a question and threw
+# the signal away. Found by the holdout3 split on "Fizyoterapimi" and "Korsemi",
+# and it applies to every term, not only the ones added alongside it.
+_INTERROGATIVE = re.compile(r"^\s*(var\s*mi|var\s*miydi|oldu\s*mu)|^\s+(mi|mu)\b")
 
 # How far to look for a negating word on either side. Wide enough to cover
 # "hayır, kazada kimse yaralanmadı", narrow enough not to reach the next
