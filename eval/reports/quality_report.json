@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-08-17T14:02:02.123083+00:00",
+  "generated_at": "2026-08-18T10:31:47.400714+00:00",
   "summary": {
     "total": 9,
     "passed": 7,
@@ -337,7 +337,7 @@
     {
       "key": "rag_accuracy",
       "label": "RAG doğruluğu",
-      "value": 0.970873786407767,
+      "value": 0.9805825242718447,
       "unit": "ratio",
       "target": 0.65,
       "target_operator": "gte",
@@ -348,16 +348,16 @@
       },
       "source": {
         "run": "rag.json",
-        "measured_at": "2026-08-17",
+        "measured_at": "2026-08-18",
         "model": null
       },
-      "numerator": 100,
+      "numerator": 101,
       "denominator": 103,
       "breakdown": [
         {
           "label": "Sayısal sorular (SQL yolu)",
-          "value": 0.9821428571428571,
-          "numerator": 55,
+          "value": 1.0,
+          "numerator": 56,
           "denominator": 56
         },
         {

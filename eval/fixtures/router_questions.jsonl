@@ -1,0 +1,24 @@
+{"id": "RT-001", "split": "tune", "expected_route": "sql", "question": "Kaç kritik ihbar var?", "kind": "aggregate", "note": ""}
+{"id": "RT-002", "split": "tune", "expected_route": "sql", "question": "En çok hangi ilden ihbar geliyor?", "kind": "aggregate", "note": ""}
+{"id": "RT-003", "split": "tune", "expected_route": "retrieval", "question": "Dolu hasarlarında müşteriler ne anlatıyor?", "kind": "content", "note": ""}
+{"id": "RT-004", "split": "tune", "expected_route": "retrieval", "question": "Park halinde çarpılan araçlarda ne tür hasarlar var?", "kind": "content", "note": ""}
+{"id": "RT-005", "split": "tune", "expected_route": "sql", "question": "46 NT 7528 plakalı ihbar hangi ilden geldi?", "kind": "lookup", "note": "RQ-101; bu kusuru ortaya cikaran soru"}
+{"id": "RT-006", "split": "tune", "expected_route": "sql", "question": "POL-2021-11111 numaralı poliçenin ihbarı onaylandı mı?", "kind": "lookup", "note": ""}
+{"id": "RT-007", "split": "tune", "expected_route": "sql", "question": "34 ZZ 1111 plakalı aracın tahmini hasar tutarı ne kadar?", "kind": "lookup", "note": ""}
+{"id": "RT-008", "split": "tune", "expected_route": "sql", "question": "Ortalama hasar tutarı ne kadar?", "kind": "aggregate", "note": ""}
+{"id": "RT-009", "split": "tune", "expected_route": "retrieval", "question": "Yaralanmalı ihbarlarda neler anlatılıyor?", "kind": "content", "note": ""}
+{"id": "RT-010", "split": "tune", "expected_route": "sql", "question": "Bu hafta kaç ihbar geldi?", "kind": "aggregate", "note": ""}
+{"id": "RT-101", "split": "holdout", "expected_route": "sql", "question": "06 AB 4242 plakalı ihbarın durumu ne?", "kind": "lookup", "note": ""}
+{"id": "RT-102", "split": "holdout", "expected_route": "sql", "question": "35 KLM 9090 plakalı aracın olay tarihi neydi?", "kind": "lookup", "note": ""}
+{"id": "RT-103", "split": "holdout", "expected_route": "sql", "question": "POL-2023-40010 poliçe numaralı ihbar hangi kanaldan geldi?", "kind": "lookup", "note": ""}
+{"id": "RT-104", "split": "holdout", "expected_route": "sql", "question": "16 TR 7777 plakalı ihbarda yaralanma var mı?", "kind": "lookup", "note": ""}
+{"id": "RT-105", "split": "holdout", "expected_route": "sql", "question": "07 DE 1234 plakalı aracın hasar türü ne?", "kind": "lookup", "note": ""}
+{"id": "RT-106", "split": "holdout", "expected_route": "sql", "question": "Toplam kaç ihbar arşivlendi?", "kind": "aggregate", "note": ""}
+{"id": "RT-107", "split": "holdout", "expected_route": "sql", "question": "Hangi hasar türü en az görülüyor?", "kind": "aggregate", "note": ""}
+{"id": "RT-108", "split": "holdout", "expected_route": "sql", "question": "E-postadan gelen ihbarların ortalama tutarı nedir?", "kind": "aggregate", "note": ""}
+{"id": "RT-109", "split": "holdout", "expected_route": "retrieval", "question": "Hayvan çarpması ihbarlarında olay nasıl anlatılıyor?", "kind": "content", "note": ""}
+{"id": "RT-110", "split": "holdout", "expected_route": "retrieval", "question": "Cam kırılması vakalarında müşteriler neyi vurguluyor?", "kind": "content", "note": ""}
+{"id": "RT-111", "split": "holdout", "expected_route": "retrieval", "question": "Çekici çağrılan ihbarlarda ne yaşanmış?", "kind": "content", "note": ""}
+{"id": "RT-112", "split": "holdout", "expected_route": "retrieval", "question": "Karşı tarafın kaçtığı olaylar nasıl tarif edilmiş?", "kind": "content", "note": ""}
+{"id": "RT-113", "split": "holdout", "expected_route": "sql", "question": "Yaralanma bildirilen kaç ihbar var?", "kind": "aggregate", "note": ""}
+{"id": "RT-114", "split": "holdout", "expected_route": "retrieval", "question": "Sel ve su baskını ihbarlarında neler anlatılıyor?", "kind": "content", "note": ""}
