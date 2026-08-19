@@ -30,12 +30,18 @@ Measured over the same 1000-record corpus on 2026-08-09, and over
 eval/fixtures/injury_phrasings.jsonl - 34 phrasings written by hand precisely
 because the corpus does not contain them:
 
-                                        before      after
-  corpus recall                         80/80       80/80
-  corpus precision                      98.8%       100%
-  fixture, ASCII-typed injuries          0/5         4/5
-  fixture, injury-free controls          9/15        5/15
-  fixture, all hard positives            0/19        4/19
+                                    original      08-09       08-17
+  corpus recall                        80/80      80/80       80/80
+  corpus precision                     98.8%       100%        100%
+  fixture, ASCII-typed injuries          0/5        4/5         4/5
+  fixture, injury-free controls         9/15       5/15        1/15
+  fixture, all hard positives           0/19       4/19        4/19
+
+The 08-17 column is CONTEXT_TERMS, below: four of the five remaining false fires
+were a medical word naming a place or a collision target, and qualifying them
+removed all four without moving a single recall figure. The one left is "ölüm
+virajında kaza yaptım" - an idiom for a dangerous bend, and not this layer's to
+fix: the model calls that one critical on its own, so the OR fires either way.
 
 The last row is the honest one. 14 of the 19 are phrased through medical context
 alone - "112'yi aradık", "dikiş attırmak zorunda kaldım", "acilde dört saat
@@ -46,6 +52,7 @@ it does not.
 """
 
 import re
+from collections.abc import Callable
 
 INJURY_TERMS = (
     "yaralı",
@@ -65,6 +72,8 @@ INJURY_TERMS = (
     "kanama",
     "kanıyor",
     "kan kayb",
+    # These four are context, not injury: they name medical involvement, and a
+    # vehicle can hit any of them without anyone being hurt. See CONTEXT_TERMS.
     "hastane",
     "ambulans",
     "ölü",
@@ -77,6 +86,31 @@ INJURY_TERMS = (
     "bilinci kapalı",
     "bilinçsiz",
     "acil servis",
+    # Medical process and aftermath. These name what was done for a person
+    # rather than what happened to them, and CONTEXT_TERMS is why they can be
+    # here at all: bare they are compound modifiers ("yoğun bakım ünitesi",
+    # "tomografi cihazı"), inflected they are a person being treated ("yoğun
+    # bakıma alındı", "tomografisi çekildi").
+    #
+    # Added 2026-08-17 after three prompt versions failed to reach this family:
+    # blind recall on it sat near 44% for v2, v3 and v4 alike, on sentences no
+    # person would hesitate over. What the prompt could not learn, grammar can -
+    # for the inflected half of the family. The bare half ("ameliyat oldum",
+    # "tedavi gördüm") stays out of reach and is measured separately.
+    "ameliyat",
+    "tomografi",
+    "röntgen",
+    "fizyoterapi",
+    "yoğun bakım",
+    "tedavi",
+    "taburcu",
+    "korse",
+    "serum",
+    "pansuman",
+    "dikiş",
+    "istirahat",
+    "iş göremezlik",
+    "ağrı kesici",
 )
 
 # Terms are also matched with their Turkish letters folded to ASCII, for text
@@ -92,6 +126,75 @@ INJURY_TERMS = (
 # prefixes "Kanlıca", an İstanbul district, with or without folding. Bleeding is
 # already asserted by "kanama" and "kan kayb".
 NEVER_FOLD_TERMS = frozenset({"ölü", "ölüm"})
+
+# Terms that name medical involvement rather than an injury. Alone they assert
+# nothing: a hospital is also a car park, an ambulance is also something you can
+# rear-end, and "acil servis" is also a sign to drive into. Measured over
+# eval/fixtures/injury_phrasings.jsonl, these four produced four of the five
+# false criticals in the injury-free control group - and the deterministic rule
+# is an OR with the model, so a false fire here cannot be corrected downstream.
+#
+# Deleting them was the obvious fix and is the wrong one. Over the 1000-record
+# corpus they carry no recall at all (80/80 with and without, measured
+# 2026-08-17), but the corpus never phrases an injury through them; the
+# hand-written cases below do, and there the term is the only evidence:
+#   "ambulans çağırdık"   "hastaneye kaldırıldı"   "eşim acil servise kaldırıldı"
+# So they are kept and qualified instead.
+CONTEXT_TERMS = frozenset(
+    {
+        "hastane",
+        "ambulans",
+        "sedye",
+        "acil servis",
+        "ameliyat",
+        "tomografi",
+        "röntgen",
+        "fizyoterapi",
+        "yoğun bakım",
+        "tedavi",
+        "taburcu",
+        "korse",
+        "serum",
+        "pansuman",
+        "dikiş",
+        "istirahat",
+        "iş göremezlik",
+        "ağrı kesici",
+    }
+)
+
+# A context term qualifies two ways, and both are needed - each covers what the
+# other misses.
+#
+# 1. The term is inflected. In a Turkish noun-noun compound the modifier takes no
+#    suffix, and every false positive has exactly that shape: *hastane* otoparkı,
+#    *ambulans* yolu, *acil servis* tabelası, *sedye* taşıyan araç. The noun names
+#    a thing in the world there. A suffix means it is participating in the
+#    sentence instead - "hastanede", "hastaneye", "acil servise" - which is a
+#    person being somewhere or taken somewhere. This is grammar rather than a word
+#    list, which is why it is the first check.
+_INFLECTED = re.compile(r"^[a-z]")
+
+# 2. A care action follows. Turkish subjects are bare too, so inflection alone
+#    would drop "ambulans çağırdık" and "ambulans geldi", where the term is the
+#    subject and the evidence is the verb. Stems, because the suffix carries the
+#    person rather than the meaning ("çağırdık", "çağrıldı", "kaldırıldı").
+#
+#    "taşı-" is deliberately absent. "Sedye taşıyan bir araca çarptım" is a
+#    collision with a vehicle and is the exact shape this guard exists to stop;
+#    admitting the stem would readmit that false positive to catch a phrasing
+#    ("hastaneye taşındı") that the dative in check 1 already covers.
+_CARE_ACTION = re.compile(r"(cagir|cagr|geld|gelm|kaldir|gotur|sevk|mudahale)")
+
+# How far past the term to look for the verb. Turkish puts it last, so it follows
+# the noun it acts on.
+_CARE_WINDOW = 30
+
+
+def _context_qualifies(guards: str, end: int) -> bool:
+    """Whether a CONTEXT_TERMS match at `end` is about a person, not a place."""
+    tail = guards[end:]
+    return bool(_INFLECTED.match(tail) or _CARE_ACTION.search(tail[:_CARE_WINDOW]))
 
 
 # A term must start a word. Only the left edge is checked: Turkish suffixes
@@ -119,7 +222,13 @@ _EMPTY_FIELD = re.compile(r"^\s*:\s*(\n|$)")
 # yaralanan var mı?" - and the term in the question was being read as the
 # customer reporting one. The third category beside negation and the empty
 # label: the text contains the word without asserting the thing.
-_INTERROGATIVE = re.compile(r"^\s*(var\s*mi|var\s*miydi|oldu\s*mu|mi\b|mu\b)")
+# The bare particle needs a space in front of it. Turkish writes the question
+# particle as its own word ("korse mi?") and the possessive/accusative suffix
+# attached ("korsemi"), and the two are the same letters - so a pattern allowing
+# zero spaces read "Korsemi çıkarmama izin vermediler" as a question and threw
+# the signal away. Found by the holdout3 split on "Fizyoterapimi" and "Korsemi",
+# and it applies to every term, not only the ones added alongside it.
+_INTERROGATIVE = re.compile(r"^\s*(var\s*mi|var\s*miydi|oldu\s*mu)|^\s+(mi|mu)\b")
 
 # How far to look for a negating word on either side. Wide enough to cover
 # "hayır, kazada kimse yaralanmadı", narrow enough not to reach the next
@@ -149,7 +258,13 @@ def _fold_tr_ascii(text: str) -> str:
     return text.translate(_ASCII_FOLD)
 
 
-def _asserts(haystack: str, guards: str, needle: str) -> bool:
+def _asserts(
+    haystack: str,
+    guards: str,
+    needle: str,
+    *,
+    requires: Callable[[str, int], bool] | None = None,
+) -> bool:
     """Whether `haystack` claims `needle` happened, rather than merely spelling it.
 
     A term counts when it starts a word, is not negated on either side, is not a
@@ -159,6 +274,11 @@ def _asserts(haystack: str, guards: str, needle: str) -> bool:
     their context. Folding preserves length, so an offset found in `haystack`
     points at the same place in `guards`; separating them lets a term be matched
     with its Turkish letters intact while the guards stay spelling-independent.
+
+    `requires` is the extra condition a context term has to meet
+    (_context_qualifies). Checked per occurrence rather than per text, so one
+    mention that fails it does not bury a later one that passes: "Ambulans yolu
+    kapalıydı, sonra ambulans çağırdık" is still an injury.
     """
     for match in re.finditer(_WORD_START + re.escape(needle), haystack):
         after = guards[match.end() : match.end() + _NEGATION_WINDOW]
@@ -171,6 +291,8 @@ def _asserts(haystack: str, guards: str, needle: str) -> bool:
         if _EMPTY_FIELD.match(guards[match.end() :]):
             continue
         if _INTERROGATIVE.match(after):
+            continue
+        if requires is not None and not requires(guards, match.end()):
             continue
 
         return True
@@ -186,7 +308,9 @@ def find_injury_signals(text: str) -> list[str]:
 
     Erring towards a false positive is deliberate where the two rules disagree:
     the cost of one unnecessary critical is an operator's minute, and the cost of
-    a missed one is the case this system exists to catch.
+    a missed one is the case this system exists to catch. That asymmetry does not
+    extend to CONTEXT_TERMS, which name medical involvement rather than harm and
+    need a care action beside them to count.
     """
     normalized = _normalize_tr(text)
     folded = _fold_tr_ascii(normalized)
@@ -194,9 +318,12 @@ def find_injury_signals(text: str) -> list[str]:
 
     for term in INJURY_TERMS:
         needle = _normalize_tr(term)
-        if _asserts(normalized, folded, needle):
+        requires = _context_qualifies if term in CONTEXT_TERMS else None
+        if _asserts(normalized, folded, needle, requires=requires):
             found.append(term)
-        elif term not in NEVER_FOLD_TERMS and _asserts(folded, folded, _fold_tr_ascii(needle)):
+        elif term not in NEVER_FOLD_TERMS and _asserts(
+            folded, folded, _fold_tr_ascii(needle), requires=requires
+        ):
             found.append(term)
 
     return found

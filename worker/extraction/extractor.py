@@ -21,6 +21,7 @@ from pydantic import BaseModel
 
 from worker.extraction.schema import ClaimExtraction
 from worker.llm.client import LlmClient, ModelTier, get_llm_client
+from worker.shared.injury_terms import _normalize_tr
 
 PROMPT_PATH = Path(__file__).resolve().parents[2] / "prompts" / "extraction_v1.txt"
 
@@ -71,22 +72,60 @@ def build_user_content(text: str, received_at: datetime, channel: str) -> str:
     )
 
 
+def _spaced_pattern(quote: str) -> re.Pattern | None:
+    """The quote's words, separated by any whitespace. None when it has none."""
+    words = quote.split()
+    if not words:
+        return None
+    return re.compile(r"\s+".join(re.escape(word) for word in words))
+
+
 def locate_quote(quote: str, text: str) -> tuple[int, int] | None:
     """Return the character span of `quote` inside `text`, or None.
 
-    Exact match first. Failing that, the same words separated by any whitespace:
-    models reflow line breaks, and that alone should not condemn a field.
+    Three attempts, each forgiving one thing a model does that is not a
+    fabrication:
+
+    1. Exact match.
+    2. The same words across any whitespace - models reflow line breaks, and
+       that alone should not condemn a field.
+    3. The same words ignoring case. A model that quotes mid-sentence tends to
+       lowercase the first letter it copies: the text says "Ameliyat olmam
+       gerekti" and the quote comes back "ameliyat olmam gerekti". Nothing was
+       invented there, and calling it unsupported both overstates the
+       hallucination rate (CLAUDE.md §7) and holds the claim out of automatic
+       approval.
+
+    Measured 2026-08-17: over the pinned extraction baseline this changes
+    nothing - all 35 unverified fields there carry no quote at all rather than
+    an unlocatable one - and over the injury fixture it moves evidence fidelity
+    from 28/37 to 36/37. So it corrects a latent defect rather than restating a
+    published number.
+
+    The returned span indexes `text`, so the case fold has to be one character
+    for one; the length check below refuses to guess when it is not.
     """
     index = text.find(quote)
     if index >= 0:
         return index, index + len(quote)
 
-    words = quote.split()
-    if not words:
+    pattern = _spaced_pattern(quote)
+    if pattern is None:
         return None
 
-    pattern = re.compile(r"\s+".join(re.escape(word) for word in words))
     match = pattern.search(text)
+    if match:
+        return match.start(), match.end()
+
+    folded_text, folded_quote = _normalize_tr(text), _normalize_tr(quote)
+    if len(folded_text) != len(text) or len(folded_quote) != len(quote):
+        return None
+
+    folded_pattern = _spaced_pattern(folded_quote)
+    if folded_pattern is None:
+        return None
+
+    match = folded_pattern.search(folded_text)
     return (match.start(), match.end()) if match else None
 
 

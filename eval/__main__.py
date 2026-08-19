@@ -89,6 +89,13 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="channel=count,... (draws a fresh random sample instead of the pinned baseline)",
     )
+    parser.add_argument(
+        "--ids",
+        type=Path,
+        default=None,
+        metavar="PATH",
+        help="a different pinned sample file (default: eval/fixtures/baseline_100_ids.json)",
+    )
     parser.add_argument("--out", type=Path, default=None, help="where to write the results")
     return parser
 
@@ -111,7 +118,16 @@ def report_gate(records: list[gate.GateRecord]) -> None:
             print(f"  {rule:<40} {count}")
         print()
 
-    print(gate.format_measurements(gate.sweep(records, gate.candidate_sets(records))))
+    measurements = gate.sweep(records, gate.candidate_sets(records))
+    # The gate ADR-005 replaced, printed beside the one that ships whenever the
+    # run holds the flag it needs. A decision that stopped being enforced should
+    # not also stop being visible: this row is what respecting the sanity flag
+    # would cost today, in the same table as everything else.
+    if all(item.has_sanity_flags is not None for item in records):
+        measurements.append(
+            gate.measure(records, label="sanity blocks (ADR-005 öncesi)", sanity_blocks=True)
+        )
+    print(gate.format_measurements(measurements))
 
     shipped = gate.measure(records)
     if shipped.reasons:
@@ -141,6 +157,12 @@ def main(argv: list[str] | None = None) -> int:
     if args.mix:
         records = sample(records, seed=args.seed, mix=args.mix)
         description = f"random sample, seed {args.seed}, mix {args.mix}"
+    elif args.ids:
+        # A second pinned sample, for a metric the baseline cannot carry. The
+        # baseline is drawn from the claim-only pool, so content_type has one
+        # class there; eval/fixtures/content_type_ids.json is class-balanced.
+        records = select(records, baseline_ids(args.ids))
+        description = f"pinned sample: {args.ids.name}"
     else:
         records = select(records, baseline_ids())
         description = "pinned baseline sample"

@@ -116,7 +116,14 @@ def test_turkish_uppercase_still_matches():
 
 
 def test_find_injury_signals_reports_every_match():
-    signals = find_injury_signals("yaralı vardı, ambulans ve hastane")
+    """Each term is reported once, in dictionary order.
+
+    The context terms are written the way a person reports them - "ambulans
+    geldi", "hastaneye" - rather than as bare nouns. Bare is the shape of a
+    compound modifier ("hastane otoparkı"), and injury_terms.CONTEXT_TERMS does
+    not count those.
+    """
+    signals = find_injury_signals("yaralı vardı, ambulans geldi, hastaneye kaldırdılar")
     assert {"yaralı", "ambulans", "hastane"} <= set(signals)
 
 

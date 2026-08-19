@@ -40,7 +40,11 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session
 
 from worker.llm.client import ModelTier
+from worker.rag.answer import PROMPT_PATH as ANSWER_PROMPT_PATH
 from worker.rag.ask import ask
+from worker.rag.router import PROMPT_PATH as ROUTER_PROMPT_PATH
+from worker.rag.schema_context import PROMPT_PATH as TEXT_TO_SQL_PROMPT_PATH
+from worker.rag.sql_answer import PROMPT_PATH as SQL_ANSWER_PROMPT_PATH
 
 load_dotenv()
 
@@ -139,19 +143,34 @@ def _fold(value: str) -> str:
     return lowered.translate(str.maketrans("çğıöşü", "cgiosu"))
 
 
+def _fold_any(candidates: list[str], text_value: str) -> bool:
+    """Whether any candidate appears in `text_value`, folded on both sides."""
+    haystack = _fold(text_value)
+    return any(_fold(item) in haystack for item in candidates)
+
+
 def score_sql(question: Question, answer, expected) -> tuple[bool, str]:
-    """The reference value has to be in the answer, as a number or as a word."""
+    """The reference value has to be in the answer, as a number or as a word.
+
+    `expected_any` is a fallback, never a substitute. It used to be checked
+    first, which quietly turned a self-updating key into a hand-written one: on
+    2026-08-17 RQ-045 failed because it still expected "dolu" while the
+    reference query returned "other" and the system had answered "other"
+    correctly. A hand-written list can only widen what counts as right here; it
+    can no longer decide it.
+    """
     if not answer.answerable:
         return False, f"reddetti: {answer.refusal_reason}"
     if answer.answer is None:
         return False, "answerable ama cevap boş"
 
-    if question.expected_any:
-        wanted = [_fold(item) for item in question.expected_any]
-        haystack = _fold(answer.answer)
-        if any(item in haystack for item in wanted):
-            return True, ""
-        return False, f"cevapta {question.expected_any} yok"
+    if question.expected_any and _fold_any(question.expected_any, answer.answer):
+        return True, ""
+
+    if expected is None or expected == "":
+        if question.expected_any:
+            return False, f"cevapta {question.expected_any} yok"
+        return False, "referans sorgu değer döndürmedi"
 
     if isinstance(expected, (int, float)) or (
         hasattr(expected, "__float__") and not isinstance(expected, str)
@@ -274,6 +293,16 @@ def write_run(outcomes: list[Outcome], path: Path, *, meta: dict | None = None) 
         "meta": {
             "run_at": datetime.now(UTC).isoformat(),
             "questions": len(outcomes),
+            # All four, because a question passes through several of them and any
+            # one can be the reason a number moved. The Text-to-SQL prompt went
+            # v1 -> v3 while the last committed run stayed at v1, and nothing in
+            # the file said so.
+            "prompts": {
+                "router": ROUTER_PROMPT_PATH.name,
+                "text_to_sql": TEXT_TO_SQL_PROMPT_PATH.name,
+                "sql_answer": SQL_ANSWER_PROMPT_PATH.name,
+                "answer": ANSWER_PROMPT_PATH.name,
+            },
             **(meta or {}),
         },
         "outcomes": [asdict(item) for item in outcomes],

@@ -99,11 +99,29 @@ def test_a_critical_claim_always_reaches_a_person():
     assert REASON_CRITICAL in decision.reasons
 
 
-def test_a_possible_pii_leak_is_never_approved():
+def test_a_sanity_flag_is_recorded_and_does_not_hold_the_claim():
+    """ADR-005. The flag was measured and separates nothing - it fires on clean
+    and leaking records alike - so it stopped being a reject and stayed a note."""
     decision = _evaluate(has_sanity_flags=True)
+
+    assert decision.approved is True
+    assert REASON_SANITY_FLAG not in decision.reasons
+    assert REASON_SANITY_FLAG in decision.advisory_flags
+
+
+def test_sanity_blocks_restores_the_gate_adr_005_replaced():
+    """Kept measurable rather than deleted: the day the flag discriminates
+    again, reopening the decision is a run, not a rewrite."""
+    decision = _evaluate(has_sanity_flags=True, sanity_blocks=True)
 
     assert decision.approved is False
     assert REASON_SANITY_FLAG in decision.reasons
+
+
+def test_an_unflagged_claim_carries_no_sanity_note():
+    decision = _evaluate(has_sanity_flags=False)
+
+    assert REASON_SANITY_FLAG not in decision.advisory_flags
 
 
 def test_only_claims_are_approved():
@@ -147,12 +165,12 @@ def test_an_unverified_field_holds_the_claim():
 def test_every_applicable_reason_is_listed_not_just_the_first():
     decision = _evaluate(
         urgency="critical",
-        has_sanity_flags=True,
+        extraction_present=False,
         validation_flags=[_flag("future_incident_date", "incident_date")],
     )
 
     assert REASON_CRITICAL in decision.reasons
-    assert REASON_SANITY_FLAG in decision.reasons
+    assert REASON_NO_EXTRACTION in decision.reasons
     assert REASON_BLOCKING_FLAGS in decision.reasons
 
 

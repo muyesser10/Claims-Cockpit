@@ -10,6 +10,8 @@ mean what the report says they mean.
 
 from datetime import datetime
 
+import pytest
+
 from eval.gate import (
     GateRecord,
     blocking_rule_names,
@@ -26,6 +28,7 @@ from eval.loader import EvalRecord
 from worker.classification.schema import ClaimClassification
 from worker.extraction.schema import ClaimExtraction
 from worker.llm.client import LlmSettings
+from worker.masking.sanity import SanityCheckResult
 
 EXPECTED = {
     "channel": "email",
@@ -60,14 +63,20 @@ CLAIM_VERDICT = ClaimClassification(
 class StubClient:
     """Answers whichever schema it is asked for, and records the calls."""
 
-    def __init__(self, *, verdict=None, extraction=None) -> None:
+    def __init__(self, *, verdict=None, extraction=None, sanity=None) -> None:
         self.settings = LlmSettings(api_key="not-used")
         self.verdict = verdict or CLAIM_VERDICT
         self.extraction = extraction or CORRECT_EXTRACTION
+        # Clean by default. The real pass flags 148 of 150 claims, but a gate
+        # test that inherited that would be testing the sanity layer; the one
+        # test that cares sets it explicitly.
+        self.sanity = sanity or SanityCheckResult(leak_found=False)
         self.calls: list[dict] = []
 
     def structured(self, **kwargs):
         self.calls.append(kwargs)
+        if kwargs["response_model"] is SanityCheckResult:
+            return self.sanity
         if kwargs["response_model"] is ClaimClassification:
             return self.verdict
         return self.extraction
@@ -136,8 +145,10 @@ def test_a_non_claim_skips_extraction_as_the_pipeline_does():
 
     assert item.extraction_present is False
     assert item.content_type == "info_request"
-    # Classification only - one call, not two.
-    assert len(client.calls) == 1
+    # Sanity and classification ran, as the pipeline runs them. Extraction is
+    # the one that must not have - asserted by name rather than by counting, so
+    # adding a step upstream cannot make this test fail for the wrong reason.
+    assert "ClaimExtraction" not in [call["response_model"].__name__ for call in client.calls]
 
 
 def test_the_answer_key_verdicts_are_carried_for_the_classification_report():
@@ -307,3 +318,44 @@ def test_the_report_says_n_a_rather_than_inventing_a_precision():
     text = format_measurements(sweep([_gate_record(urgency="critical")], {"strict": frozenset()}))
 
     assert "n/a" in text
+
+
+# --- the masking sanity flag, recorded but not enforced since ADR-005 -------
+
+
+def test_the_sanity_flag_is_measured_rather_than_assumed_away():
+    """It used to be hardcoded False here while the real pass flags 148 of 150
+    claims, so the coverage this module reported described almost no claim."""
+    client = StubClient(sanity=SanityCheckResult(leak_found=True))
+
+    outcome = run_live([_record()], client=client)
+
+    assert outcome.records[0].has_sanity_flags is True
+
+
+def test_a_flagged_record_is_approved_and_sanity_blocks_shows_what_it_would_cost():
+    """ADR-005 in one assertion pair. The record is otherwise approvable, so the
+    difference between the two numbers is the sanity flag and nothing else.
+    """
+    records = [_gate_record(has_sanity_flags=True)]
+
+    assert measure(records).approved == 1
+    assert measure(records, sanity_blocks=True).approved == 0
+
+
+def test_the_counterfactual_refuses_a_run_that_never_measured_the_flag():
+    """The old default filled this gap in with False and two committed §7 rows
+    turned out to be counterfactuals nobody had labelled."""
+    records = [_gate_record(has_sanity_flags=None)]
+
+    assert measure(records).approved == 1
+    with pytest.raises(ValueError, match="measured the sanity flag"):
+        measure(records, sanity_blocks=True)
+
+
+def test_a_run_that_never_measured_sanity_reads_as_not_measured():
+    """Older result files carry no value; None must not silently mean False in
+    a way a reader cannot see."""
+    records = run_live([_record()], client=StubClient(), measure_sanity=False).records
+
+    assert records[0].has_sanity_flags is None

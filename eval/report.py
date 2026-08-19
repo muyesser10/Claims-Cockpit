@@ -1,15 +1,17 @@
 # eval/report.py
 """The CLAUDE.md §7 quality table, as one machine-readable file.
 
-§7 lists eight targets. Seven are measured, each by a different module, over a
-different sample, on a different day - and until now the only place they existed
-together was a paragraph someone retyped by hand. This builds that table from
-the runs themselves, so every number on the Metrikler screen can be traced back
-to the file that produced it.
+§7 lists eight targets and this table has nine rows: classification is measured
+twice, once for urgency and once for content type, because the system decides
+both and only urgency was ever reported. Each row comes from a different module,
+over a different sample, on a different day - and until now the only place they
+existed together was a paragraph someone retyped by hand. This builds that table
+from the runs themselves, so every number on the Metrikler screen can be traced
+back to the file that produced it.
 
 Every row carries its own provenance: sample size, source run, measurement date.
 Deliberately per row and not once at the top - a single date would claim the
-eight numbers were measured together, and they were not.
+numbers were measured together, and they were not.
 
 The output is committed. eval/results/ is gitignored, eval/reports/ is not: the
 screen reads a reviewed snapshot, never whatever happens to sit on one laptop.
@@ -36,7 +38,14 @@ RESULTS_DIR = REPO_ROOT / "eval" / "results"
 REPORTS_DIR = REPO_ROOT / "eval" / "reports"
 
 DEFAULT_EXTRACTION = RESULTS_DIR / "run_masked_baseline.json"
-DEFAULT_GATE = RESULTS_DIR / "gate_post62.json"
+# Re-measured after classification_v3 shipped. The previous run (gate_post62)
+# was made with classification_v1, so from the moment the prompt changed these
+# two rows described a prompt the system no longer runs.
+DEFAULT_GATE = RESULTS_DIR / "gate_v3.json"
+# A second gate run, over the class-balanced sample. The baseline is drawn from
+# the claim-only pool, so content_type has one class there and a macro-F1 over it
+# would average nothing.
+DEFAULT_CONTENT_TYPE = RESULTS_DIR / "gate_content_type.json"
 DEFAULT_INJURY = RESULTS_DIR / "injury_recall.json"
 DEFAULT_MASKING = RESULTS_DIR / "masking_recall.json"
 DEFAULT_RAG = RESULTS_DIR / "rag.json"
@@ -60,6 +69,15 @@ MASKING_GROUP_LABELS = {
 INJURY_GROUP_LABELS = {
     "non_canonical": "kanonik olmayan ifadeler",
     "ascii_fold": "Türkçe karakteri düşmüş ifadeler",
+}
+# Ordered hardest-earned first: holdout3 is the only split nothing has been
+# tuned against, holdout2 was spent choosing between two prompts, and holdout
+# has been iterated on since the injury work began.
+SPLIT_LABELS = {
+    "holdout3": "kör set — tıbbi süreç ailesi (hiç ayar yapılmadı)",
+    "holdout2": "tıbbi süreç ailesi (aday seçiminde kullanıldı)",
+    "holdout": "dokunulmamış vakalar (sonradan iterasyon gördü)",
+    "tune": "ayarlama yapılan vakalar",
 }
 
 
@@ -240,11 +258,25 @@ def gate_metrics(path: Path) -> list[Metric]:
     urgency = classification.build_report(records, "urgency")
     shipped = gate.measure(records)
     bound = binomial_lower_bound(shipped.correct, shipped.approved)
+    sanity_measured = any(item.has_sanity_flags is not None for item in records)
 
     precision_notes = [
         f"Kapsam {_pct(shipped.coverage)} — {shipped.approved}/{shipped.total} ihbar "
         "kapıdan geçti.",
     ]
+    precision_notes.append(
+        "Maskeleme sanity bayrağı bu kapsamı düşürmüyor: ADR-005'ten beri bayrak "
+        "kaydediliyor ama reddetmiyor. Gerekçe ölçüm — bayrak sızıntılı 40 kaydın "
+        "40'ında, temiz 40 kaydın da 40'ında, gerçek veritabanında 150 claim'in "
+        "148'inde çıkıyor; sabit ret sayıldığında kapsam %71'den ~%1'e iniyordu. "
+        "Bayrak `advisory_flags` üzerinden denetim izinde duruyor."
+        + (
+            ""
+            if sanity_measured
+            else " Bu koşu bayrağı ölçmedi, dolayısıyla eski davranışın bu örneklemdeki "
+            "bedeli burada gösterilemiyor (ölçmek için `run_live(measure_sanity=True)`)."
+        )
+    )
     if bound is not None:
         precision_notes.append(
             f"Tek taraflı %95 güven alt sınırı {_pct(bound)}. Örneklem bu genişlikte olduğu "
@@ -299,6 +331,94 @@ def gate_metrics(path: Path) -> list[Metric]:
     ]
 
 
+CONTENT_TYPE_LABELS = {
+    "claim": "İhbar",
+    "info_request": "Bilgi talebi",
+    "irrelevant": "Alakasız",
+}
+
+
+def content_type_metric(path: Path) -> Metric:
+    """Content-type macro-F1, over the class-balanced sample.
+
+    §7 asks for classification macro-F1 and the system classifies two things.
+    Only urgency was ever reported, because the pinned sample is claim-only and
+    the other field had one class in it. This is the missing half, and it is the
+    half whose failure is silent: content_type gates extraction, so calling a
+    real claim an info_request drops it out of the queue without an error.
+
+    Its own row rather than a breakdown of the urgency one: it is a different
+    sample, and a row carries its own provenance.
+    """
+    if not path.exists():
+        return Metric(
+            key="content_type_f1",
+            label="Sınıflandırma macro-F1 (içerik tipi)",
+            value=None,
+            unit="ratio",
+            target=0.85,
+            target_operator="gte",
+            sample=Sample(n=None, unit="ihbar", description=""),
+            source=None,
+            notes=[
+                "Henüz ölçülmedi. `python -m eval --gate --ids "
+                "eval/fixtures/content_type_ids.json` ile ölçülür.",
+            ],
+        )
+
+    meta = _read_meta(path)
+    records = gate.read_run(path)
+    report = classification.build_report(records, "content_type")
+
+    # The safety-critical direction, singled out because the macro average hides
+    # it: a claim called anything else never reaches extraction or the queue.
+    claim_recall = next(
+        (item.recall for item in report.classes if item.label == "claim"),
+        None,
+    )
+
+    return Metric(
+        key="content_type_f1",
+        label="Sınıflandırma macro-F1 (içerik tipi)",
+        value=report.macro_f1,
+        unit="ratio",
+        target=0.85,
+        target_operator="gte",
+        sample=Sample(
+            n=report.scored,
+            unit="ihbar",
+            description="sınıf dengeli örneklem (her tipten eşit sayıda)",
+        ),
+        source=Source(run=path.name, measured_at=_measured_at(meta), model=meta.get("model")),
+        breakdown=[
+            Breakdown(
+                label=CONTENT_TYPE_LABELS.get(item.label, item.label),
+                value=item.f1,
+                numerator=item.true_positives,
+                denominator=item.support,
+            )
+            for item in report.classes
+        ],
+        notes=[
+            "Ayrı bir örneklem üzerinden: sabitlenmiş baseline yalnızca ihbarlardan "
+            "çekildiği için orada bu alanın tek sınıfı var. Korpustaki 24 `irrelevant` "
+            "kaydın hepsi burada, diğer iki sınıf ona eşitlendi.",
+            "Bu alan extraction'ı kapıyor — gerçek bir ihbara `info_request` demek, hata "
+            "vermeden kuyruktan düşürür. §7'nin sessiz kayıp üreten tek sınıflandırma "
+            "hatası budur, ve manşet sayı onu göstermez: asıl bakılacak yer `İhbar` "
+            f"sınıfının recall'ü, bu koşuda {_pct(claim_recall)} — yani hiçbir gerçek "
+            "ihbar kaybedilmedi.",
+            "Hatanın tamamı iki claim-olmayan sınıf arasında. İkisi de extraction'ı "
+            "atlayıp normal aciliyete düştüğü için operasyonel sonucu aynı; yanlış olan "
+            "etiket, akıbet değil.",
+            "Korpus sınıfları belirgin şekilde farklı yazıyor (`irrelevant` 24 kaydın "
+            "21'i benzersiz, `info_request` 74'ün 74'ü). Bu sayı sistemin ayırt etme "
+            "gücünün üst sınırı sayılmamalı — kritik recall'ün korpus üzerinde %100 "
+            "vermesiyle aynı tuzak.",
+        ],
+    )
+
+
 def critical_recall_metric(path: Path, *, measured_at: str | None = None) -> Metric:
     """Critical-urgency recall over phrasings the corpus does not contain.
 
@@ -319,34 +439,60 @@ def critical_recall_metric(path: Path, *, measured_at: str | None = None) -> Met
     deterministic = sum(1 for row in positives if row.get("signals"))
     false_criticals = sum(1 for row in controls if row.get("critical"))
 
-    groups = sorted({row["group"] for row in positives})
-    breakdown = [
-        # Fixed, not derived: the corpus has 38 injury records and the urgency
-        # phrase caught all 38. It is carried here so the reader can see the
-        # number §7 used to report beside the one that replaced it. Regenerating
-        # the corpus invalidates it - eval/masking_recall.py's holdout split is
-        # the model for measuring this properly, and this row should follow it.
+    def _ratio(rows: list[dict]) -> tuple[int, int]:
+        return sum(1 for row in rows if row.get("critical")), len(rows)
+
+    breakdown: list[Breakdown] = []
+
+    # The two halves first, because they are what the headline has to be read
+    # against. `tune` are the cases the prompt and the dictionary were written
+    # while looking at, `holdout` were written before anything was run against
+    # them, and only the second estimates reach rather than fit. Emitted only
+    # when the run carries the split, so an older file still renders.
+    for split in SPLIT_LABELS:
+        rows = [row for row in positives if row.get("split") == split]
+        if not rows:
+            continue
+        hits, total = _ratio(rows)
+        breakdown.append(
+            Breakdown(
+                label=SPLIT_LABELS[split],
+                value=hits / total,
+                numerator=hits,
+                denominator=total,
+            )
+        )
+
+    breakdown.append(
+        Breakdown(
+            label="deterministik katman (LLM düştüğünde kalan)",
+            value=deterministic / len(positives) if positives else None,
+            numerator=deterministic,
+            denominator=len(positives),
+        )
+    )
+    # Fixed, not derived: the corpus has 38 injury records and the urgency
+    # phrase caught all 38. It is carried here so the reader can see the
+    # number §7 used to report beside the one that replaced it. Regenerating
+    # the corpus invalidates it - eval/masking_recall.py's holdout split is
+    # the model for measuring this properly, and this row should follow it.
+    breakdown.append(
         Breakdown(
             label="korpus kalıbı (kanonik ifadeler)",
             value=1.0,
             numerator=38,
             denominator=38,
-        ),
-        Breakdown(
-            label="deterministik katman, kanonik olmayan",
-            value=deterministic / len(positives) if positives else None,
-            numerator=deterministic,
-            denominator=len(positives),
-        ),
-    ]
-    for group in groups:
+        )
+    )
+    for group in sorted({row["group"] for row in positives}):
         rows = [row for row in positives if row["group"] == group]
+        hits, total = _ratio(rows)
         breakdown.append(
             Breakdown(
                 label=f"pipeline, {INJURY_GROUP_LABELS.get(group, group)}",
-                value=sum(1 for row in rows if row.get("critical")) / len(rows),
-                numerator=sum(1 for row in rows if row.get("critical")),
-                denominator=len(rows),
+                value=hits / total,
+                numerator=hits,
+                denominator=total,
             )
         )
 
@@ -375,11 +521,26 @@ def critical_recall_metric(path: Path, *, measured_at: str | None = None) -> Met
             "bu metrik %100 verir; ama oradaki kritik kayıtların hepsi dört sabit cümleden "
             "birini taşıyor ve dördü de kanonik bir yaralanma terimi içeriyor — yani o %100 "
             "kalıbı ölçüyor, sistemin erişimini değil.",
+            "Manşet iki yarının toplamıdır. Ayarlama yapılan yarıda ölçülen değer sistemin "
+            "erişimini değil kuralların ne kadar iyi yazıldığını söyler; dokunulmamış yarı "
+            "kırılımda ayrı bir satır olarak duruyor ve dürüst tahmin odur.",
             f"Deterministik katman bu ifadelerin {deterministic}/{len(positives)} tanesini "
             "yakalıyor; geri kalanı LLM taşıyor. Sağlayıcı fallback'i olmadığı sürece bu "
             "metrik tek bir servise bağlı.",
             f"Yaralanma içermeyen {len(controls)} kontrol ifadesinin {false_criticals} tanesi "
-            "yanlışlıkla kritik işaretleniyor — recall'ın karşı tarafı.",
+            "yanlışlıkla kritik işaretleniyor — recall'ın karşı tarafı. Beşi de deterministik "
+            "katmandan geliyor; model tek bir yanlış kritik üretmedi.",
+            f"Prompt: {meta.get('prompt', 'bilinmiyor')}, seed {meta.get('seed', '—')}, "
+            f"{meta.get('tier', '—')} kademe. Aynı seed'le iki koşu 70 vakanın 1'inde ayrıştı, "
+            "yani dokunulmamış yarıda bir puan gürültünün içindedir.",
+            "Kalan kaçakların tamamı tek bir dilbilgisi şekli: ÇIPLAK isim + yardımcı "
+            "fiil ('ameliyat oldum', 'korse taktılar', 'röntgen çektirdim'). Türkçe bu "
+            "yapıda ismi eksiz bırakır, dolayısıyla 'ameliyathane girişi' gibi bir "
+            "tamlamadan ayırt edilemiyor. Çekimli yarı (2026-08-18'de eklendi) "
+            "yakalanıyor; bu yarı için sonraki aday, kendi kör setini ister.",
+            "Model bu ailede sıfır katkı veriyor: kör sette (holdout3) yakalanan 8 vakanın "
+            "8'i de deterministik katmandan, 'LLM düşerse kaybedilen' 0. Üç prompt "
+            "versiyonu denendi (v2/v3/v4), kör performans hepsinde ~%44'te kaldı.",
         ],
     )
 
@@ -538,6 +699,7 @@ def build(
     *,
     extraction: Path = DEFAULT_EXTRACTION,
     gate_run: Path = DEFAULT_GATE,
+    content_type: Path = DEFAULT_CONTENT_TYPE,
     injury: Path = DEFAULT_INJURY,
     masking: Path = DEFAULT_MASKING,
     manual: Path = DEFAULT_MANUAL,
@@ -550,6 +712,7 @@ def build(
     rows: list[Metric] = [
         *extraction_metrics(extraction),
         *gate_metrics(gate_run),
+        content_type_metric(content_type),
         critical_recall_metric(injury, measured_at=provenance.get(injury.name)),
         masking_recall_metric(masking, measured_at=provenance.get(masking.name)),
         *manual_metrics(manual_data),
@@ -606,6 +769,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m eval.report", description=__doc__)
     parser.add_argument("--extraction", type=Path, default=DEFAULT_EXTRACTION)
     parser.add_argument("--gate", type=Path, default=DEFAULT_GATE, dest="gate_run")
+    parser.add_argument("--content-type", type=Path, default=DEFAULT_CONTENT_TYPE)
     parser.add_argument("--injury", type=Path, default=DEFAULT_INJURY)
     parser.add_argument("--masking", type=Path, default=DEFAULT_MASKING)
     parser.add_argument("--manual", type=Path, default=DEFAULT_MANUAL)
@@ -616,6 +780,7 @@ def main(argv: list[str] | None = None) -> int:
     payload = build(
         extraction=args.extraction,
         gate_run=args.gate_run,
+        content_type=args.content_type,
         injury=args.injury,
         masking=args.masking,
         manual=args.manual,

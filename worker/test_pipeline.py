@@ -85,6 +85,7 @@ def _classification(**kwargs) -> ClassificationResult:
         "llm_urgency": Urgency.NORMAL,
         "urgency_source": LLM_URGENCY,
         "injury_signals": [],
+        "injury_evidence": None,
         "reasoning": "test",
         "model": "gpt-4o-mini",
         "duration_ms": 5,

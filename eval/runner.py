@@ -19,6 +19,7 @@ from pathlib import Path
 
 from eval.loader import EvalRecord
 from eval.scoring import RecordScore, from_dict, score_record, to_dict
+from worker.extraction.extractor import PROMPT_PATH as EXTRACTION_PROMPT_PATH
 from worker.extraction.extractor import extract
 from worker.llm.client import LlmClient, ModelTier
 from worker.masking.pipeline import mask_all
@@ -134,6 +135,10 @@ def write_results(
             "records": len(outcome.scores),
             "failures": outcome.failures,
             "masked": outcome.masked,
+            # The prompt is half of what produced these numbers and was the half
+            # that went unrecorded: prompts/ is versioned, and a result could not
+            # be traced back to the text that wrote it.
+            "prompts": {"extraction": EXTRACTION_PROMPT_PATH.name},
             **(meta or {}),
         },
         "records": [to_dict(score) for score in outcome.scores],

@@ -1,9 +1,9 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-08-09T11:57:11.496513+00:00",
+  "generated_at": "2026-08-19T11:24:56.161129+00:00",
   "summary": {
-    "total": 8,
-    "passed": 6,
+    "total": 9,
+    "passed": 7,
     "failed": 2,
     "unmeasured": 0
   },
@@ -80,7 +80,7 @@
     {
       "key": "classification_f1",
       "label": "Sınıflandırma macro-F1 (aciliyet)",
-      "value": 0.9635736244431897,
+      "value": 0.9710761215185993,
       "unit": "ratio",
       "target": 0.85,
       "target_operator": "gte",
@@ -90,8 +90,8 @@
         "description": "sabitlenmiş baseline örneklemi"
       },
       "source": {
-        "run": "gate_post62.json",
-        "measured_at": "2026-08-09",
+        "run": "gate_v3.json",
+        "measured_at": "2026-08-17",
         "model": "gpt-4o-mini"
       },
       "numerator": null,
@@ -105,14 +105,14 @@
         },
         {
           "label": "Yüksek",
-          "value": 0.9565217391304348,
-          "numerator": 33,
+          "value": 0.9696969696969697,
+          "numerator": 32,
           "denominator": 34
         },
         {
           "label": "Normal",
-          "value": 0.9818181818181818,
-          "numerator": 54,
+          "value": 0.9911504424778761,
+          "numerator": 56,
           "denominator": 56
         }
       ],
@@ -124,7 +124,7 @@
     {
       "key": "auto_approve_precision",
       "label": "Otomatik onay precision",
-      "value": 0.9714285714285714,
+      "value": 0.971830985915493,
       "unit": "ratio",
       "target": 0.95,
       "target_operator": "gte",
@@ -134,17 +134,65 @@
         "description": "sabitlenmiş baseline örneklemi"
       },
       "source": {
-        "run": "gate_post62.json",
-        "measured_at": "2026-08-09",
+        "run": "gate_v3.json",
+        "measured_at": "2026-08-17",
         "model": "gpt-4o-mini"
       },
-      "numerator": 68,
-      "denominator": 70,
+      "numerator": 69,
+      "denominator": 71,
       "breakdown": [],
       "notes": [
-        "Kapsam %70,0 — 70/100 ihbar kapıdan geçti.",
-        "Tek taraflı %95 güven alt sınırı %91,3. Örneklem bu genişlikte olduğu sürece hedefin sağlandığı istatistiksel olarak gösterilemez, sadece ölçülür.",
+        "Kapsam %71,0 — 71/100 ihbar kapıdan geçti.",
+        "Maskeleme sanity bayrağı bu kapsamı düşürmüyor: ADR-005'ten beri bayrak kaydediliyor ama reddetmiyor. Gerekçe ölçüm — bayrak sızıntılı 40 kaydın 40'ında, temiz 40 kaydın da 40'ında, gerçek veritabanında 150 claim'in 148'inde çıkıyor; sabit ret sayıldığında kapsam %71'den ~%1'e iniyordu. Bayrak `advisory_flags` üzerinden denetim izinde duruyor. Bu koşu bayrağı ölçmedi, dolayısıyla eski davranışın bu örneklemdeki bedeli burada gösterilemiyor (ölçmek için `run_live(measure_sanity=True)`).",
+        "Tek taraflı %95 güven alt sınırı %91,4. Örneklem bu genişlikte olduğu sürece hedefin sağlandığı istatistiksel olarak gösterilemez, sadece ölçülür.",
         "Yanlış onaylananlar: GT-000094, GT-000325. Bunlardan counterparty_exists kaynaklı olanlar bilinen ground truth kusurudur (data/gt_generator.py etiketi metinden türetmiyor), gerçek model hatası değildir."
+      ],
+      "status": "pass"
+    },
+    {
+      "key": "content_type_f1",
+      "label": "Sınıflandırma macro-F1 (içerik tipi)",
+      "value": 0.9440559440559441,
+      "unit": "ratio",
+      "target": 0.85,
+      "target_operator": "gte",
+      "sample": {
+        "n": 72,
+        "unit": "ihbar",
+        "description": "sınıf dengeli örneklem (her tipten eşit sayıda)"
+      },
+      "source": {
+        "run": "gate_content_type.json",
+        "measured_at": "2026-08-17",
+        "model": "gpt-4o-mini"
+      },
+      "numerator": null,
+      "denominator": null,
+      "breakdown": [
+        {
+          "label": "İhbar",
+          "value": 1.0,
+          "numerator": 24,
+          "denominator": 24
+        },
+        {
+          "label": "Bilgi talebi",
+          "value": 0.923076923076923,
+          "numerator": 24,
+          "denominator": 24
+        },
+        {
+          "label": "Alakasız",
+          "value": 0.9090909090909091,
+          "numerator": 20,
+          "denominator": 24
+        }
+      ],
+      "notes": [
+        "Ayrı bir örneklem üzerinden: sabitlenmiş baseline yalnızca ihbarlardan çekildiği için orada bu alanın tek sınıfı var. Korpustaki 24 `irrelevant` kaydın hepsi burada, diğer iki sınıf ona eşitlendi.",
+        "Bu alan extraction'ı kapıyor — gerçek bir ihbara `info_request` demek, hata vermeden kuyruktan düşürür. §7'nin sessiz kayıp üreten tek sınıflandırma hatası budur, ve manşet sayı onu göstermez: asıl bakılacak yer `İhbar` sınıfının recall'ü, bu koşuda %100,0 — yani hiçbir gerçek ihbar kaybedilmedi.",
+        "Hatanın tamamı iki claim-olmayan sınıf arasında. İkisi de extraction'ı atlayıp normal aciliyete düştüğü için operasyonel sonucu aynı; yanlış olan etiket, akıbet değil.",
+        "Korpus sınıfları belirgin şekilde farklı yazıyor (`irrelevant` 24 kaydın 21'i benzersiz, `info_request` 74'ün 74'ü). Bu sayı sistemin ayırt etme gücünün üst sınırı sayılmamalı — kritik recall'ün korpus üzerinde %100 vermesiyle aynı tuzak."
       ],
       "status": "pass"
     },
@@ -156,18 +204,48 @@
       "target": 0.97,
       "target_operator": "gte",
       "sample": {
-        "n": 19,
+        "n": 76,
         "unit": "ifade",
         "description": "korpusta bulunmayan yaralanma ifadeleri (elle yazılmış fixture)"
       },
       "source": {
         "run": "injury_recall.json",
-        "measured_at": "2026-08-09",
+        "measured_at": "2026-08-18",
         "model": null
       },
-      "numerator": 15,
-      "denominator": 19,
+      "numerator": 60,
+      "denominator": 76,
       "breakdown": [
+        {
+          "label": "kör set — tıbbi süreç ailesi (hiç ayar yapılmadı)",
+          "value": 0.5714285714285714,
+          "numerator": 8,
+          "denominator": 14
+        },
+        {
+          "label": "tıbbi süreç ailesi (aday seçiminde kullanıldı)",
+          "value": 0.6666666666666666,
+          "numerator": 12,
+          "denominator": 18
+        },
+        {
+          "label": "dokunulmamış vakalar (sonradan iterasyon gördü)",
+          "value": 0.92,
+          "numerator": 23,
+          "denominator": 25
+        },
+        {
+          "label": "ayarlama yapılan vakalar",
+          "value": 0.8947368421052632,
+          "numerator": 17,
+          "denominator": 19
+        },
+        {
+          "label": "deterministik katman (LLM düştüğünde kalan)",
+          "value": 0.35526315789473684,
+          "numerator": 27,
+          "denominator": 76
+        },
         {
           "label": "korpus kalıbı (kanonik ifadeler)",
           "value": 1.0,
@@ -175,28 +253,26 @@
           "denominator": 38
         },
         {
-          "label": "deterministik katman, kanonik olmayan",
-          "value": 0.21052631578947367,
-          "numerator": 4,
-          "denominator": 19
-        },
-        {
           "label": "pipeline, Türkçe karakteri düşmüş ifadeler",
           "value": 1.0,
-          "numerator": 5,
-          "denominator": 5
+          "numerator": 9,
+          "denominator": 9
         },
         {
           "label": "pipeline, kanonik olmayan ifadeler",
-          "value": 0.7142857142857143,
-          "numerator": 10,
-          "denominator": 14
+          "value": 0.7611940298507462,
+          "numerator": 51,
+          "denominator": 67
         }
       ],
       "notes": [
         "Manşet sayı korpusun değil, fixture'ın sayısıdır. Korpus üzerinden ölçüldüğünde bu metrik %100 verir; ama oradaki kritik kayıtların hepsi dört sabit cümleden birini taşıyor ve dördü de kanonik bir yaralanma terimi içeriyor — yani o %100 kalıbı ölçüyor, sistemin erişimini değil.",
-        "Deterministik katman bu ifadelerin 4/19 tanesini yakalıyor; geri kalanı LLM taşıyor. Sağlayıcı fallback'i olmadığı sürece bu metrik tek bir servise bağlı.",
-        "Yaralanma içermeyen 15 kontrol ifadesinin 5 tanesi yanlışlıkla kritik işaretleniyor — recall'ın karşı tarafı."
+        "Manşet iki yarının toplamıdır. Ayarlama yapılan yarıda ölçülen değer sistemin erişimini değil kuralların ne kadar iyi yazıldığını söyler; dokunulmamış yarı kırılımda ayrı bir satır olarak duruyor ve dürüst tahmin odur.",
+        "Deterministik katman bu ifadelerin 27/76 tanesini yakalıyor; geri kalanı LLM taşıyor. Sağlayıcı fallback'i olmadığı sürece bu metrik tek bir servise bağlı.",
+        "Yaralanma içermeyen 42 kontrol ifadesinin 6 tanesi yanlışlıkla kritik işaretleniyor — recall'ın karşı tarafı. Beşi de deterministik katmandan geliyor; model tek bir yanlış kritik üretmedi.",
+        "Prompt: classification_v3.txt, seed 42, cheap kademe. Aynı seed'le iki koşu 70 vakanın 1'inde ayrıştı, yani dokunulmamış yarıda bir puan gürültünün içindedir.",
+        "Kalan kaçakların tamamı tek bir dilbilgisi şekli: ÇIPLAK isim + yardımcı fiil ('ameliyat oldum', 'korse taktılar', 'röntgen çektirdim'). Türkçe bu yapıda ismi eksiz bırakır, dolayısıyla 'ameliyathane girişi' gibi bir tamlamadan ayırt edilemiyor. Çekimli yarı (2026-08-18'de eklendi) yakalanıyor; bu yarı için sonraki aday, kendi kör setini ister.",
+        "Model bu ailede sıfır katkı veriyor: kör sette (holdout3) yakalanan 8 vakanın 8'i de deterministik katmandan, 'LLM düşerse kaybedilen' 0. Üç prompt versiyonu denendi (v2/v3/v4), kör performans hepsinde ~%44'te kaldı."
       ],
       "status": "fail"
     },
@@ -275,40 +351,40 @@
     {
       "key": "rag_accuracy",
       "label": "RAG doğruluğu",
-      "value": 0.88,
+      "value": 0.9805825242718447,
       "unit": "ratio",
       "target": 0.65,
       "target_operator": "gte",
       "sample": {
-        "n": 100,
+        "n": 103,
         "unit": "soru",
         "description": "elle yazılmış değerlendirme seti, canlı veritabanına karşı"
       },
       "source": {
         "run": "rag.json",
-        "measured_at": "2026-08-09",
+        "measured_at": "2026-08-18",
         "model": null
       },
-      "numerator": 88,
-      "denominator": 100,
+      "numerator": 101,
+      "denominator": 103,
       "breakdown": [
         {
           "label": "Sayısal sorular (SQL yolu)",
-          "value": 0.8181818181818182,
-          "numerator": 45,
-          "denominator": 55
+          "value": 1.0,
+          "numerator": 56,
+          "denominator": 56
         },
         {
           "label": "İçerik soruları (arama yolu)",
-          "value": 0.95,
-          "numerator": 19,
+          "value": 0.9,
+          "numerator": 18,
           "denominator": 20
         },
         {
           "label": "Reddedilmesi gerekenler",
-          "value": 0.96,
-          "numerator": 24,
-          "denominator": 25
+          "value": 1.0,
+          "numerator": 27,
+          "denominator": 27
         }
       ],
       "notes": [

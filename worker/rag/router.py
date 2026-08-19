@@ -18,7 +18,7 @@ from pydantic import BaseModel, Field
 
 from worker.llm.client import LlmClient, ModelTier
 
-PROMPT_PATH = Path(__file__).resolve().parents[2] / "prompts" / "rag_router_v1.txt"
+PROMPT_PATH = Path(__file__).resolve().parents[2] / "prompts" / "rag_router_v2.txt"
 
 # Read once: the prompt is static and identical for every question.
 SYSTEM_PROMPT = PROMPT_PATH.read_text(encoding="utf-8")

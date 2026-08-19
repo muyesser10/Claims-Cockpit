@@ -268,6 +268,8 @@ def _write_inputs(tmp_path: Path) -> dict[str, Path]:
 
 
 def test_the_table_has_a_row_for_every_one_of_the_eight_targets(tmp_path: Path):
+    """Nine rows for eight targets: classification is measured twice, once per
+    field, because the system decides both and only urgency used to be shown."""
     payload = build(**_write_inputs(tmp_path))
 
     assert [row["key"] for row in payload["metrics"]] == [
@@ -275,6 +277,7 @@ def test_the_table_has_a_row_for_every_one_of_the_eight_targets(tmp_path: Path):
         "hallucination_rate",
         "classification_f1",
         "auto_approve_precision",
+        "content_type_f1",
         "critical_recall",
         "masking_recall",
         "p95_latency",

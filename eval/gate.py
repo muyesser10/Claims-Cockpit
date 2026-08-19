@@ -28,10 +28,13 @@ from pathlib import Path
 
 from eval.loader import EvalRecord
 from eval.scoring import score_record
+from worker.classification.classifier import PROMPT_PATH as CLASSIFICATION_PROMPT_PATH
 from worker.classification.classifier import classify
+from worker.extraction.extractor import PROMPT_PATH as EXTRACTION_PROMPT_PATH
 from worker.extraction.extractor import extract
 from worker.llm.client import LlmClient, ModelTier
 from worker.masking.pipeline import mask_all
+from worker.masking.sanity import check_sanity
 from worker.masking.unmask import unmask_data
 from worker.routing.auto_approve import ADVISORY_RULES, evaluate
 from worker.validation.validator import validate
@@ -57,6 +60,16 @@ class GateRecord:
     # Every compared field matched the answer key. The bar for a claim nobody
     # will read.
     correct: bool
+    # Whether the masking sanity pass flagged this record. None means the run
+    # never measured it - which is what every run before 2026-08-17 did, while
+    # measure() quietly assumed False. Measured 2026-08-17: the pass flags 148
+    # of 150 real claims, so that assumption described almost no claim.
+    #
+    # Since ADR-005 the flag no longer decides anything, so None is no longer a
+    # silent assumption: it only limits what can be asked of a run. A run that
+    # never measured it cannot answer `sanity_blocks=True`, and measure() says
+    # so rather than filling the gap in.
+    has_sanity_flags: bool | None = None
     # What the answer key said, kept for the classification report and so a
     # disagreement can be looked at rather than guessed at.
     expected_content_type: str | None = None
@@ -113,6 +126,7 @@ def build_record(
     client: LlmClient,
     tier: ModelTier = ModelTier.CHEAP,
     seed: int | None = None,
+    measure_sanity: bool = True,
 ) -> GateRecord:
     """Run one record through the pipeline's steps and reduce it to a GateRecord.
 
@@ -121,6 +135,15 @@ def build_record(
     an extraction it would never have had.
     """
     masked_text, mappings = mask_all(record.text)
+
+    # The pipeline runs this between masking and classification, and the gate
+    # treats its flag as a fixed reject - so a gate measurement that skips it
+    # measures a gate nobody runs.
+    sanity_flagged = None
+    if measure_sanity:
+        sanity_flagged = check_sanity(
+            masked_text, message_id=record.gt_id, client=client, tier=tier, seed=seed
+        ).leak_found
 
     classification = classify(
         masked_text,
@@ -144,6 +167,7 @@ def build_record(
             validation_flags=[],
             unverified_fields=[],
             extraction_present=False,
+            has_sanity_flags=sanity_flagged,
             correct=False,
             expected_content_type=expected.get("content_type"),
             expected_urgency=expected.get("urgency"),
@@ -182,6 +206,7 @@ def build_record(
         validation_flags=flags,
         unverified_fields=result.unverified_fields,
         extraction_present=True,
+        has_sanity_flags=sanity_flagged,
         correct=bool(scored) and all(item.hit for item in scored),
         expected_content_type=expected.get("content_type"),
         expected_urgency=expected.get("urgency"),
@@ -196,6 +221,7 @@ def run_live(
     client: LlmClient | None = None,
     tier: ModelTier = ModelTier.CHEAP,
     seed: int | None = None,
+    measure_sanity: bool = True,
     on_progress: Callable[[int, int, str], None] | None = None,
 ) -> GateRunOutcome:
     """Build a GateRecord for every record, keeping going when one fails.
@@ -209,7 +235,15 @@ def run_live(
 
     for index, record in enumerate(records, start=1):
         try:
-            outcome.records.append(build_record(record, client=client, tier=tier, seed=seed))
+            outcome.records.append(
+                build_record(
+                    record,
+                    client=client,
+                    tier=tier,
+                    seed=seed,
+                    measure_sanity=measure_sanity,
+                )
+            )
         except Exception as exc:  # noqa: BLE001 - recorded, not swallowed
             outcome.failures.append((record.gt_id, f"{type(exc).__name__}: {exc}"))
         if on_progress is not None:
@@ -223,13 +257,30 @@ def measure(
     *,
     label: str = "shipped",
     advisory_rules: frozenset[str] = ADVISORY_RULES,
+    sanity_blocks: bool = False,
 ) -> GateMeasurement:
     """Apply one advisory set to a finished run.
 
     `enabled=True` is forced. The environment flag says whether the gate is
     switched on in production; it has nothing to say about what the gate would
     achieve, which is the whole question here.
+
+    `sanity_blocks` measures the gate ADR-005 replaced, where a masking-sanity
+    flag was a fixed reject. It is the counterfactual, not the shipped number,
+    and it is kept measurable rather than deleted so the decision can be reopened
+    with a number the day the flag discriminates again.
+
+    A run that never measured the flag cannot answer that question, and raises
+    rather than assuming. The assumption is what the old default did, and two
+    committed §7 rows were counterfactuals nobody had labelled as a result.
     """
+    if sanity_blocks and any(item.has_sanity_flags is None for item in records):
+        raise ValueError(
+            "sanity_blocks=True needs a run that measured the sanity flag; "
+            "this one has records with has_sanity_flags=None. Re-run with "
+            "run_live(measure_sanity=True)."
+        )
+
     approved_ids: list[str] = []
     wrong_ids: list[str] = []
     reasons: dict[str, int] = {}
@@ -240,10 +291,11 @@ def measure(
             urgency=item.urgency,
             validation_flags=item.validation_flags,
             unverified_fields=item.unverified_fields,
-            has_sanity_flags=False,
+            has_sanity_flags=bool(item.has_sanity_flags),
             extraction_present=item.extraction_present,
             enabled=True,
             advisory_rules=advisory_rules,
+            sanity_blocks=sanity_blocks,
         )
         if decision.approved:
             approved_ids.append(item.gt_id)
@@ -336,6 +388,14 @@ def write_run(
             "records": len(outcome.records),
             "failures": outcome.failures,
             "masked": outcome.masked,
+            # Both prompts, because this run uses both and either one moving
+            # changes the numbers. Recorded after a classification prompt was
+            # replaced and two committed §7 rows silently became measurements of
+            # a prompt that no longer ships.
+            "prompts": {
+                "classification": CLASSIFICATION_PROMPT_PATH.name,
+                "extraction": EXTRACTION_PROMPT_PATH.name,
+            },
             **(meta or {}),
         },
         "records": [asdict(item) for item in outcome.records],
