@@ -685,6 +685,12 @@ def rag_metric(path: Path) -> Metric:
             "doğrulanıyor. Anahtar elle yazılmadığı için eskimiyor.",
             "Sorular canlı veritabanının içeriğinden türetildi, korpustan değil — RAG "
             "korpusu değil veritabanını okuyor.",
+            "%100 bir düzeltmenin sonucu DEĞİL. Önceki koşuda kaçan iki erişim sorusu "
+            "(inek çarpması, jant hasarı) ADR-002'nin öngördüğü sınırdan kaçıyordu: "
+            "masked_text'in tamamı tek vektöre gömülüyor, tek kelimelik sorgunun sinyali "
+            "seyreliyor. O sınıra dokunulmadı; korpus yeniden üretilince aynı açıklamalar "
+            "farklı dağıldı ve iki soru hedefini buldu. Parça bazlı gömme hâlâ açık iş, "
+            "ve bu satır kapandığı için kapanmış sayılmamalı.",
         ],
     )
 

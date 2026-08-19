@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-08-19T13:39:28.879848+00:00",
+  "generated_at": "2026-08-19T14:52:34.761288+00:00",
   "summary": {
     "total": 9,
     "passed": 7,
@@ -290,7 +290,7 @@
       },
       "source": {
         "run": "masking_recall.json",
-        "measured_at": "2026-08-09",
+        "measured_at": "2026-08-19",
         "model": null
       },
       "numerator": 3221,
@@ -324,18 +324,18 @@
     {
       "key": "p95_latency",
       "label": "p95 uçtan uca gecikme",
-      "value": 10.95,
+      "value": 12.11,
       "unit": "seconds",
       "target": 60.0,
       "target_operator": "lte",
       "sample": {
-        "n": 43,
+        "n": 150,
         "unit": "ihbar",
         "description": "pipeline'dan geçmiş ihbarlar (denetim izi olan tüm kayıtlar)"
       },
       "source": {
         "run": "audit_trail",
-        "measured_at": "2026-08-09",
+        "measured_at": "2026-08-19",
         "model": null
       },
       "numerator": null,
@@ -343,15 +343,16 @@
       "breakdown": [],
       "notes": [
         "Diğer metriklerden farklı olarak bir eval koşusundan değil, veritabanındaki denetim izinden elle alındı — kaynağı eval/reports/manual_inputs.json.",
-        "Mesaj başına adım sürelerinin toplamı üzerinden; medyan 4,92 sn.",
-        "Kapsam, denetim izi bulunan kayıtlar. Veritabanındaki ilk 57 ihbar seed betiğiyle doğrudan yazıldığı için pipeline'dan hiç geçmemiştir ve bu ölçümün dışındadır."
+        "Mesaj başına adım sürelerinin toplamı üzerinden; medyan 8,18 sn, ortalama 8,16 sn.",
+        "PR #75 sonrası yeniden ölçüldü: veritabanı boşaltılıp yeni korpusun ilk 150 kaydı gerçek pipeline'dan (replay/ → /ingest → worker) geçirildi, yani ölçümün tamamı canlı koşudan geliyor — önceki 43 kayıtlık ölçümde olduğu gibi seed betiğiyle doğrudan yazılmış kayıt yok.",
+        "Önceki değer 10,95 sn (n=43, 2026-08-09). Artış örneklemin tamamının pipeline'dan geçmesinden ve mesaj başına üç LLM çağrısından geliyor; hedefin (≤60 sn) çok altında."
       ],
       "status": "pass"
     },
     {
       "key": "rag_accuracy",
       "label": "RAG doğruluğu",
-      "value": 0.9805825242718447,
+      "value": 1.0,
       "unit": "ratio",
       "target": 0.65,
       "target_operator": "gte",
@@ -362,10 +363,10 @@
       },
       "source": {
         "run": "rag.json",
-        "measured_at": "2026-08-18",
+        "measured_at": "2026-08-19",
         "model": null
       },
-      "numerator": 101,
+      "numerator": 103,
       "denominator": 103,
       "breakdown": [
         {
@@ -376,8 +377,8 @@
         },
         {
           "label": "İçerik soruları (arama yolu)",
-          "value": 0.9,
-          "numerator": 18,
+          "value": 1.0,
+          "numerator": 20,
           "denominator": 20
         },
         {
@@ -390,7 +391,7 @@
       "notes": [
         "Her sorunun cevap anahtarı kendisiyle geliyor: sayısal sorular aynı veritabanına karşı koşan bir referans sorguyla, erişim soruları bulunması gereken ihbar listesiyle, reddetme soruları da cevaplanmaması gerektiğiyle doğrulanıyor. Anahtar elle yazılmadığı için eskimiyor.",
         "Sorular canlı veritabanının içeriğinden türetildi, korpustan değil — RAG korpusu değil veritabanını okuyor.",
-        "Bu koşu hangi korpusa karşı ölçüldüğünü kaydetmemiş — korpus parmak izi alanı sonradan eklendi. Sayı güncel korpusu tarif etmiyor olabilir; yeniden koşulana kadar doğrulanamaz."
+        "%100 bir düzeltmenin sonucu DEĞİL. Önceki koşuda kaçan iki erişim sorusu (inek çarpması, jant hasarı) ADR-002'nin öngördüğü sınırdan kaçıyordu: masked_text'in tamamı tek vektöre gömülüyor, tek kelimelik sorgunun sinyali seyreliyor. O sınıra dokunulmadı; korpus yeniden üretilince aynı açıklamalar farklı dağıldı ve iki soru hedefini buldu. Parça bazlı gömme hâlâ açık iş, ve bu satır kapandığı için kapanmış sayılmamalı."
       ],
       "status": "pass"
     }
