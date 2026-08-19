@@ -9,9 +9,12 @@ produced them and fail everywhere else - including CI.
 import json
 from pathlib import Path
 
+from eval.loader import corpus_fingerprint
 from eval.report import (
     Metric,
     Sample,
+    Source,
+    _note_stale_corpus,
     binomial_lower_bound,
     build,
     critical_recall_metric,
@@ -351,3 +354,54 @@ def test_the_text_rendering_survives_a_console_that_cannot_encode_maths_signs(tm
     text = format_report(build(**_write_inputs(tmp_path)))
 
     text.encode("cp1254")
+
+
+# --- which corpus a row actually describes --------------------------------
+
+
+def test_a_run_from_another_corpus_says_so_on_its_own_row(tmp_path: Path):
+    """PR #75 replaced the claim behind every gt_id. Seven rows were re-measured
+    and two were not, and the file drew no distinction between them."""
+
+    run = tmp_path / "gate.json"
+    run.write_text(
+        json.dumps({"meta": {"corpus": {"texts_sha256": "old", "ground_truth_sha256": "old"}}}),
+        encoding="utf-8",
+    )
+    row = metric(source=Source(run="gate.json", measured_at="2026-08-01"))
+
+    _note_stale_corpus([row], {"gate.json": run})
+
+    assert any("BAŞKA bir korpusa" in note for note in row.notes)
+
+
+def test_a_run_that_recorded_no_corpus_reads_as_unknown_not_as_current(tmp_path: Path):
+    """Silence is what let two stale rows read as fresh."""
+
+    run = tmp_path / "gate.json"
+    run.write_text(json.dumps({"meta": {"run_at": "2026-08-09T06:43:04+00:00"}}), encoding="utf-8")
+    row = metric(source=Source(run="gate.json", measured_at="2026-08-09"))
+
+    _note_stale_corpus([row], {"gate.json": run})
+
+    assert any("kaydetmemiş" in note for note in row.notes)
+
+
+def test_a_run_on_the_current_corpus_is_left_alone(tmp_path: Path):
+
+    run = tmp_path / "gate.json"
+    run.write_text(json.dumps({"meta": {"corpus": corpus_fingerprint()}}), encoding="utf-8")
+    row = metric(source=Source(run="gate.json", measured_at="2026-08-19"))
+
+    _note_stale_corpus([row], {"gate.json": run})
+
+    assert row.notes == []
+
+
+def test_the_injury_row_is_never_flagged_because_its_fixture_is_hand_written(tmp_path: Path):
+    """injury_phrasings.jsonl owes nothing to the corpus, so a regeneration
+    leaves it as valid as it was."""
+    payload = build(**_write_inputs(tmp_path))
+
+    injury = next(row for row in payload["metrics"] if row["key"] == "critical_recall")
+    assert not any("korpusa karşı ölçüldü" in note for note in injury["notes"])

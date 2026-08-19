@@ -30,6 +30,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from eval import classification, gate, metrics, runner
+from eval.loader import corpus_fingerprint
 
 SCHEMA_VERSION = 1
 
@@ -695,6 +696,55 @@ RAG_CATEGORY_LABELS = {
 }
 
 
+def _recorded_corpus(path: Path) -> dict | None:
+    """The corpus fingerprint a run wrote down, or None if it wrote none.
+
+    Runs carry it in `meta`; masking_recall writes a flat summary and carries it
+    at the top level. Both are read here so the caller does not have to know
+    which shape it is looking at.
+    """
+    if not path.exists():
+        return None
+    raw = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(raw, dict):
+        return None
+    recorded = raw.get("meta", {}).get("corpus") if isinstance(raw.get("meta"), dict) else None
+    return recorded or raw.get("corpus")
+
+
+def _note_stale_corpus(rows: list[Metric], sources: dict[str, Path]) -> None:
+    """Say so, on the row itself, when a number describes a corpus that is gone.
+
+    The §7 table is read as though its rows were measured together. They are
+    not: each comes from its own run, and a corpus regeneration invalidates them
+    one at a time. On 2026-08-19 PR #75 replaced the claim behind every gt_id,
+    seven rows were re-measured, and two were not - and nothing in the file
+    distinguished them. This is the same lesson the prompt fields already carry,
+    applied to the other half of what produces a number.
+
+    Runs written before the fingerprint existed report as unknown rather than as
+    fresh. Silence is what made the last two stale rows readable as current.
+    """
+    current = corpus_fingerprint()
+    for row in rows:
+        if row.source is None or row.source.run not in sources:
+            continue
+        recorded = _recorded_corpus(sources[row.source.run])
+        if recorded is None:
+            row.notes.append(
+                "Bu koşu hangi korpusa karşı ölçüldüğünü kaydetmemiş — korpus parmak izi "
+                "alanı sonradan eklendi. Sayı güncel korpusu tarif etmiyor olabilir; "
+                "yeniden koşulana kadar doğrulanamaz."
+            )
+        elif recorded != current:
+            row.notes.append(
+                "DİKKAT — bu satır BAŞKA bir korpusa karşı ölçüldü. Korpus o koşudan bu "
+                "yana yeniden üretildi (gt_id'ler aynı kalsa da arkalarındaki ihbar "
+                "değişiyor), dolayısıyla bu sayı diğer satırlarla karşılaştırılabilir "
+                "değil. Yeniden koşulması gerekiyor."
+            )
+
+
 def build(
     *,
     extraction: Path = DEFAULT_EXTRACTION,
@@ -718,6 +768,13 @@ def build(
         *manual_metrics(manual_data),
         rag_metric(rag),
     ]
+
+    # Which corpus each row actually describes. Injury recall is left out on
+    # purpose: its fixture is hand-written and owes nothing to the corpus.
+    _note_stale_corpus(
+        rows,
+        {p.name: p for p in (extraction, gate_run, content_type, masking, rag)},
+    )
 
     # Keyed by status, but spelled out: "pass" is a Python keyword and this
     # summary crosses into a Pydantic model on the API side, where a field

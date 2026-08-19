@@ -33,6 +33,7 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from eval.loader import corpus_fingerprint
 from worker.masking.pipeline import mask_all
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -237,7 +238,11 @@ def main(argv: list[str] | None = None) -> int:
     print(format_report(tallies, scanned))
 
     if args.out is not None:
-        payload = {"pinned": args.pinned, **summary(tallies, scanned)}
+        payload = {
+            "pinned": args.pinned,
+            "corpus": corpus_fingerprint(),
+            **summary(tallies, scanned),
+        }
         args.out.parent.mkdir(parents=True, exist_ok=True)
         args.out.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
         print(f"\nsummary written to {args.out}")
