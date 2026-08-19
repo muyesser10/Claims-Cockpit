@@ -183,7 +183,7 @@ def build_one(index: int) -> dict:
         "damage_description": None,  # filled by text_generator later
         "damage_type": damage_type,
         "injury": injury,
-        "counterparty_exists": (random.random() < 0.6 if damage_type == "collision" else False),
+        "counterparty_exists": (damage_type == "collision"),
         "estimated_amount": (random.randint(1000, 100000) if random.random() > 0.15 else None),
     }
 
