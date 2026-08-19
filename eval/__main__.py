@@ -118,7 +118,16 @@ def report_gate(records: list[gate.GateRecord]) -> None:
             print(f"  {rule:<40} {count}")
         print()
 
-    print(gate.format_measurements(gate.sweep(records, gate.candidate_sets(records))))
+    measurements = gate.sweep(records, gate.candidate_sets(records))
+    # The gate ADR-005 replaced, printed beside the one that ships whenever the
+    # run holds the flag it needs. A decision that stopped being enforced should
+    # not also stop being visible: this row is what respecting the sanity flag
+    # would cost today, in the same table as everything else.
+    if all(item.has_sanity_flags is not None for item in records):
+        measurements.append(
+            gate.measure(records, label="sanity blocks (ADR-005 öncesi)", sanity_blocks=True)
+        )
+    print(gate.format_measurements(measurements))
 
     shipped = gate.measure(records)
     if shipped.reasons:

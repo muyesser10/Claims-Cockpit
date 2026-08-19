@@ -64,6 +64,11 @@ class GateRecord:
     # never measured it - which is what every run before 2026-08-17 did, while
     # measure() quietly assumed False. Measured 2026-08-17: the pass flags 148
     # of 150 real claims, so that assumption described almost no claim.
+    #
+    # Since ADR-005 the flag no longer decides anything, so None is no longer a
+    # silent assumption: it only limits what can be asked of a run. A run that
+    # never measured it cannot answer `sanity_blocks=True`, and measure() says
+    # so rather than filling the gap in.
     has_sanity_flags: bool | None = None
     # What the answer key said, kept for the classification report and so a
     # disagreement can be looked at rather than guessed at.
@@ -252,7 +257,7 @@ def measure(
     *,
     label: str = "shipped",
     advisory_rules: frozenset[str] = ADVISORY_RULES,
-    ignore_sanity: bool = False,
+    sanity_blocks: bool = False,
 ) -> GateMeasurement:
     """Apply one advisory set to a finished run.
 
@@ -260,12 +265,22 @@ def measure(
     switched on in production; it has nothing to say about what the gate would
     achieve, which is the whole question here.
 
-    `ignore_sanity` forces the masking-sanity flag off. It answers a different
-    question - what the remaining rules achieve on their own - and is the only
-    honest way to read a run made before the flag was measured. It is never the
-    production number: the pass flags 148 of 150 real claims, so a gate that
-    respects it approves almost nothing.
+    `sanity_blocks` measures the gate ADR-005 replaced, where a masking-sanity
+    flag was a fixed reject. It is the counterfactual, not the shipped number,
+    and it is kept measurable rather than deleted so the decision can be reopened
+    with a number the day the flag discriminates again.
+
+    A run that never measured the flag cannot answer that question, and raises
+    rather than assuming. The assumption is what the old default did, and two
+    committed §7 rows were counterfactuals nobody had labelled as a result.
     """
+    if sanity_blocks and any(item.has_sanity_flags is None for item in records):
+        raise ValueError(
+            "sanity_blocks=True needs a run that measured the sanity flag; "
+            "this one has records with has_sanity_flags=None. Re-run with "
+            "run_live(measure_sanity=True)."
+        )
+
     approved_ids: list[str] = []
     wrong_ids: list[str] = []
     reasons: dict[str, int] = {}
@@ -276,12 +291,11 @@ def measure(
             urgency=item.urgency,
             validation_flags=item.validation_flags,
             unverified_fields=item.unverified_fields,
-            has_sanity_flags=(
-                False if ignore_sanity or item.has_sanity_flags is None else item.has_sanity_flags
-            ),
+            has_sanity_flags=bool(item.has_sanity_flags),
             extraction_present=item.extraction_present,
             enabled=True,
             advisory_rules=advisory_rules,
+            sanity_blocks=sanity_blocks,
         )
         if decision.approved:
             approved_ids.append(item.gt_id)

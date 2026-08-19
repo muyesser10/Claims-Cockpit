@@ -250,10 +250,11 @@ def step_extract(db: Session, msg: RawMessage, claim: Claim, masked_text: str) -
     # any operator. Skipping extraction removed the claim's fields; it did not
     # remove the leak.
     #
-    # The flag still has teeth in the one place a suspicion belongs: it blocks
-    # auto-approval (worker/routing/auto_approve.py, REASON_SANITY_FLAG), so a
-    # flagged claim reaches a human with its fields filled in - which is what
-    # someone judging whether the text really leaked needs to see.
+    # This comment used to end by saying the flag still had teeth in the one
+    # place a suspicion belongs - it blocked auto-approval. ADR-005 removed that
+    # too, once the flag was measured rather than assumed: it fires on clean and
+    # leaking records alike, so as a gate it withheld everything and separated
+    # nothing. It is recorded now, not enforced, in all three places.
 
     # Design doc §4's early exit: only claims go on to extraction. A question
     # about a policy has no plate or incident date to pull out, and asking for

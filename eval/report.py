@@ -264,14 +264,19 @@ def gate_metrics(path: Path) -> list[Metric]:
         f"Kapsam {_pct(shipped.coverage)} — {shipped.approved}/{shipped.total} ihbar "
         "kapıdan geçti.",
     ]
-    if not sanity_measured:
-        precision_notes.append(
-            "DİKKAT — bu koşu maskeleme sanity bayrağını ölçmedi ve `has_sanity_flags=False` "
-            "varsaydı. Kapı o bayrağı sabit ret sayıyor ve bayrak 2026-08-17'de gerçek "
-            "veritabanında 150 claim'in 148'inde çıktı. Yani buradaki kapsam, kapının "
-            "bugün açılsa üreteceği kapsam DEĞİL; diğer kuralların tek başına ne "
-            "başardığını gösteren karşı-olgusal bir sayıdır. Gerçek kapsam ~%1'dir."
+    precision_notes.append(
+        "Maskeleme sanity bayrağı bu kapsamı düşürmüyor: ADR-005'ten beri bayrak "
+        "kaydediliyor ama reddetmiyor. Gerekçe ölçüm — bayrak sızıntılı 40 kaydın "
+        "40'ında, temiz 40 kaydın da 40'ında, gerçek veritabanında 150 claim'in "
+        "148'inde çıkıyor; sabit ret sayıldığında kapsam %71'den ~%1'e iniyordu. "
+        "Bayrak `advisory_flags` üzerinden denetim izinde duruyor."
+        + (
+            ""
+            if sanity_measured
+            else " Bu koşu bayrağı ölçmedi, dolayısıyla eski davranışın bu örneklemdeki "
+            "bedeli burada gösterilemiyor (ölçmek için `run_live(measure_sanity=True)`)."
         )
+    )
     if bound is not None:
         precision_notes.append(
             f"Tek taraflı %95 güven alt sınırı {_pct(bound)}. Örneklem bu genişlikte olduğu "

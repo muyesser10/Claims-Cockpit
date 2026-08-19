@@ -10,6 +10,8 @@ mean what the report says they mean.
 
 from datetime import datetime
 
+import pytest
+
 from eval.gate import (
     GateRecord,
     blocking_rule_names,
@@ -318,7 +320,7 @@ def test_the_report_says_n_a_rather_than_inventing_a_precision():
     assert "n/a" in text
 
 
-# --- the masking sanity flag, which the gate treats as a fixed reject -------
+# --- the masking sanity flag, recorded but not enforced since ADR-005 -------
 
 
 def test_the_sanity_flag_is_measured_rather_than_assumed_away():
@@ -331,16 +333,24 @@ def test_the_sanity_flag_is_measured_rather_than_assumed_away():
     assert outcome.records[0].has_sanity_flags is True
 
 
-def test_a_flagged_record_is_rejected_and_ignore_sanity_shows_what_it_cost():
-    """The counterfactual, kept separate and never reported as production.
-
-    The record is otherwise approvable, so the difference between the two
-    numbers is the sanity flag and nothing else.
+def test_a_flagged_record_is_approved_and_sanity_blocks_shows_what_it_would_cost():
+    """ADR-005 in one assertion pair. The record is otherwise approvable, so the
+    difference between the two numbers is the sanity flag and nothing else.
     """
     records = [_gate_record(has_sanity_flags=True)]
 
-    assert measure(records).approved == 0
-    assert measure(records, ignore_sanity=True).approved == 1
+    assert measure(records).approved == 1
+    assert measure(records, sanity_blocks=True).approved == 0
+
+
+def test_the_counterfactual_refuses_a_run_that_never_measured_the_flag():
+    """The old default filled this gap in with False and two committed §7 rows
+    turned out to be counterfactuals nobody had labelled."""
+    records = [_gate_record(has_sanity_flags=None)]
+
+    assert measure(records).approved == 1
+    with pytest.raises(ValueError, match="measured the sanity flag"):
+        measure(records, sanity_blocks=True)
 
 
 def test_a_run_that_never_measured_sanity_reads_as_not_measured():

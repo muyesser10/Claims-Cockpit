@@ -39,6 +39,9 @@ ADVISORY_RULES = frozenset({"invalid_policy_no_format"})
 REASON_DISABLED = "auto_approve_disabled"
 REASON_NOT_A_CLAIM = "not_a_claim"
 REASON_CRITICAL = "critical_urgency"
+# The one that is normally not a reason. Since ADR-005 it lands in
+# `advisory_flags` instead, and only appears here under `sanity_blocks=True`,
+# which is the measurement of what respecting it would cost.
 REASON_SANITY_FLAG = "masking_sanity_flag"
 REASON_NO_EXTRACTION = "no_extraction"
 REASON_BLOCKING_FLAGS = "blocking_validation_flags"
@@ -100,22 +103,34 @@ def evaluate(
     extraction_present: bool,
     enabled: bool | None = None,
     advisory_rules: frozenset[str] = ADVISORY_RULES,
+    sanity_blocks: bool = False,
 ) -> AutoApproveDecision:
     """Decide whether this claim may be approved without a human reading it.
 
-    Four of the conditions are not thresholds and are not meant to become
+    Three of the conditions are not thresholds and are not meant to become
     tunable:
 
     - A critical claim always reaches a person. Sorting an injury report to the
       front of the queue is the reason this system exists (CLAUDE.md §1); an
       injury report that skips the queue entirely defeats it, and §7 asks for
       ≥97% critical recall on exactly that case.
-    - A masking-sanity flag means the text may still hold personal data. It is
-      already enough to skip extraction; it is more than enough to require a
-      human.
     - Only claims are approved. "Approving" an info_request means nothing, and
       archiving an irrelevant message is a separate decision nobody has taken.
     - Nothing was extracted, so there is nothing to have got right.
+
+    A masking-sanity flag was the fourth until ADR-005. It is now recorded and
+    does not block: the flag was measured on 2026-08-17 and carries no
+    information. It fires on 40 of 40 leaking records and on 40 of 40 clean
+    ones, under both prompt versions, and on 148 of 150 real claims. Respecting
+    it took the gate's coverage from 71% to roughly 1%, which is not a gate that
+    protects anything - it is a gate that is switched off, spelled out at
+    length. The flag still reaches the audit row through `advisory_flags`,
+    because a suspicion that changed no decision still has to stay visible.
+
+    `sanity_blocks=True` restores the old behaviour. It exists so the decision
+    stays a measurement rather than a rewrite: eval.gate sweeps it, and the day
+    the flag discriminates again - a real surname list is the fix, not a prompt -
+    the number that reopens the question can be produced without touching code.
 
     `unverified_fields` blocks as well, and it is the one worth explaining. It
     holds the fields whose supporting quote could not be found in the source
@@ -135,7 +150,13 @@ def evaluate(
     if urgency == "critical":
         reasons.append(REASON_CRITICAL)
     if has_sanity_flags:
-        reasons.append(REASON_SANITY_FLAG)
+        # Noted either way. Which list it lands in is the whole of ADR-005:
+        # `reasons` holds a claim back, `advisory_flags` records that the
+        # suspicion existed and changed nothing.
+        if sanity_blocks:
+            reasons.append(REASON_SANITY_FLAG)
+        elif REASON_SANITY_FLAG not in advisory:
+            advisory.append(REASON_SANITY_FLAG)
     if not extraction_present:
         reasons.append(REASON_NO_EXTRACTION)
     if blocking:
