@@ -24,6 +24,8 @@ import structlog
 from openai import OpenAI
 from pydantic import BaseModel
 
+from worker.metrics import llm_calls_total, llm_tokens_total
+
 log = structlog.get_logger(__name__)
 
 # The schema the caller wants filled in, e.g. ClaimExtraction.
@@ -333,6 +335,9 @@ class LlmClient:
         try:
             result, completion = self.client.chat.completions.create_with_completion(**request)
         except Exception as exc:
+            # Counted before the raise, or a provider outage would look like a
+            # drop in traffic rather than a wall of failures.
+            llm_calls_total.labels(model=model, tier=str(tier), outcome="error").inc()
             # Never swallow it. The pipeline will send the message to the dead
             # letter queue (CLAUDE.md §4), but the reason has to be on record.
             log.error(
@@ -348,6 +353,21 @@ class LlmClient:
             raise
 
         usage = getattr(completion, "usage", None)
+        prompt_tokens = getattr(usage, "prompt_tokens", None)
+        completion_tokens = getattr(usage, "completion_tokens", None)
+
+        llm_calls_total.labels(model=model, tier=str(tier), outcome="ok").inc()
+        # None is a normal answer here, not a zero: DEMO_OFFLINE hands back
+        # completion=None because a recorded answer cost nothing, and a provider
+        # can omit usage. Counting those as 0 would report free calls the same
+        # way as calls whose cost we simply do not know.
+        if prompt_tokens is not None:
+            llm_tokens_total.labels(model=model, tier=str(tier), kind="prompt").inc(prompt_tokens)
+        if completion_tokens is not None:
+            llm_tokens_total.labels(model=model, tier=str(tier), kind="completion").inc(
+                completion_tokens
+            )
+
         log.info(
             "llm_call",
             message_id=message_id,
@@ -356,8 +376,8 @@ class LlmClient:
             response_model=response_model.__name__,
             duration_ms=_elapsed_ms(started),
             prompt_chars=len(system_prompt) + len(user_content),
-            prompt_tokens=getattr(usage, "prompt_tokens", None),
-            completion_tokens=getattr(usage, "completion_tokens", None),
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
             seed=seed,
             system_fingerprint=getattr(completion, "system_fingerprint", None),
         )
