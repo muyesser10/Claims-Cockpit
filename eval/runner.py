@@ -17,7 +17,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 
-from eval.loader import EvalRecord
+from eval.loader import EvalRecord, corpus_fingerprint
 from eval.scoring import RecordScore, from_dict, score_record, to_dict
 from worker.extraction.extractor import PROMPT_PATH as EXTRACTION_PROMPT_PATH
 from worker.extraction.extractor import extract
@@ -139,6 +139,11 @@ def write_results(
             # that went unrecorded: prompts/ is versioned, and a result could not
             # be traced back to the text that wrote it.
             "prompts": {"extraction": EXTRACTION_PROMPT_PATH.name},
+            # Which corpus produced these. The prompt lesson, applied to the
+            # other half of the pair: PR #75 regenerated every record behind
+            # every gt_id, and a run written before it is not comparable with
+            # one written after, in a way no field in this file used to show.
+            "corpus": corpus_fingerprint(),
             **(meta or {}),
         },
         "records": [to_dict(score) for score in outcome.scores],

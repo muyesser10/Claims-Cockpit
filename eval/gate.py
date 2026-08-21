@@ -26,7 +26,7 @@ from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 
-from eval.loader import EvalRecord
+from eval.loader import EvalRecord, corpus_fingerprint
 from eval.scoring import score_record
 from worker.classification.classifier import PROMPT_PATH as CLASSIFICATION_PROMPT_PATH
 from worker.classification.classifier import classify
@@ -396,6 +396,10 @@ def write_run(
                 "classification": CLASSIFICATION_PROMPT_PATH.name,
                 "extraction": EXTRACTION_PROMPT_PATH.name,
             },
+            # And which corpus. Same reasoning as the prompts above, for the
+            # half that moved on 2026-08-19: PR #75 replaced the claim behind
+            # every gt_id, so a run from before it measures other records.
+            "corpus": corpus_fingerprint(),
             **(meta or {}),
         },
         "records": [asdict(item) for item in outcome.records],

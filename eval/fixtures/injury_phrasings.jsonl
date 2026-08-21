@@ -116,3 +116,33 @@
 {"id": "IP-M20", "group": "false_positive_control", "injury": false, "channel": "email", "text": "Fizyoterapi salonunun camını kırdım.", "note": "fizyoterapi salonu = yer", "split": "holdout3"}
 {"id": "IP-M21", "group": "false_positive_control", "injury": false, "channel": "email", "text": "Korse satan dükkânın önünde çizdiler.", "note": "korse dukkani = yer", "split": "holdout3"}
 {"id": "IP-M22", "group": "false_positive_control", "injury": false, "channel": "call_transcript", "text": "Müşteri: Serum fizyolojik kutusu devrildi, hasar yok.", "note": "serum = urun", "split": "holdout3"}
+{"id": "IP-P01", "group": "non_canonical", "injury": true, "channel": "email", "text": "Korse taktılar.", "note": "korse + takt (dar kök)", "split": "holdout4"}
+{"id": "IP-P02", "group": "non_canonical", "injury": true, "channel": "call_transcript", "text": "Müşteri: Serum bağladılar.", "note": "serum + bağla (dar kök)", "split": "holdout4"}
+{"id": "IP-P03", "group": "non_canonical", "injury": true, "channel": "web_form", "text": "Açıklama: Tomografi çektiler.", "note": "tomografi + çekt (dar kök)", "split": "holdout4"}
+{"id": "IP-P04", "group": "non_canonical", "injury": true, "channel": "email", "text": "Röntgen çektiler, sonucu bekliyoruz.", "note": "röntgen + çekt (dar kök)", "split": "holdout4"}
+{"id": "IP-P05", "group": "non_canonical", "injury": true, "channel": "email", "text": "İstirahat yazdılar, beş gün.", "note": "istirahat + yazd (dar kök)", "split": "holdout4"}
+{"id": "IP-P06", "group": "non_canonical", "injury": true, "channel": "call_transcript", "text": "Müşteri: İş göremezlik raporu yazdılar.", "note": "iş göremezlik + yazd (dar kök)", "split": "holdout4"}
+{"id": "IP-P07", "group": "non_canonical", "injury": true, "channel": "email", "text": "Ağrı kesici verdiler.", "note": "ağrı kesici + verd (dar kök)", "split": "holdout4"}
+{"id": "IP-P08", "group": "non_canonical", "injury": true, "channel": "web_form", "text": "Açıklama: Fizyoterapi verdiler.", "note": "fizyoterapi + verd (dar kök)", "split": "holdout4"}
+{"id": "IP-P09", "group": "non_canonical", "injury": true, "channel": "email", "text": "Ameliyat yaptılar.", "note": "ameliyat + yapt (RİSKLİ kök, kalıntı işareti)", "split": "holdout4"}
+{"id": "IP-P10", "group": "non_canonical", "injury": true, "channel": "call_transcript", "text": "Müşteri: Pansuman yaptılar.", "note": "pansuman + yapt (RİSKLİ kök)", "split": "holdout4"}
+{"id": "IP-P11", "group": "non_canonical", "injury": true, "channel": "email", "text": "Dikiş attılar.", "note": "dikiş + at (RİSKLİ kök)", "split": "holdout4"}
+{"id": "IP-P12", "group": "non_canonical", "injury": true, "channel": "web_form", "text": "Açıklama: Taburcu ettiler.", "note": "taburcu + et (RİSKLİ kök)", "split": "holdout4"}
+{"id": "IP-P13", "group": "non_canonical", "injury": true, "channel": "call_transcript", "text": "Müşteri: Atel taktılar, üç hafta kalacakmış.", "note": "atel sözlükte YOK", "split": "holdout4"}
+{"id": "IP-P14", "group": "non_canonical", "injury": true, "channel": "email", "text": "MR çektirdim.", "note": "MR sözlükte YOK", "split": "holdout4"}
+{"id": "IP-P15", "group": "non_canonical", "injury": true, "channel": "web_form", "text": "Açıklama: Alçıya aldılar.", "note": "alçı sözlükte YOK", "split": "holdout4"}
+{"id": "IP-P16", "group": "non_canonical", "injury": true, "channel": "email", "text": "İğne vurdular.", "note": "iğne sözlükte YOK", "split": "holdout4"}
+{"id": "IP-P17", "group": "false_positive_control", "injury": false, "channel": "email", "text": "Korse satan mağazanın vitrinini kırdım.", "note": "TUZAK: korse = satılan ürün", "split": "holdout4"}
+{"id": "IP-P18", "group": "false_positive_control", "injury": false, "channel": "call_transcript", "text": "Müşteri: Serum şişesi kutusu bagajda devrildi, araçta hasar yok.", "note": "TUZAK: serum = ürün", "split": "holdout4"}
+{"id": "IP-P19", "group": "false_positive_control", "injury": false, "channel": "web_form", "text": "Açıklama: Röntgen cihazı taşıyan araç yandan vurdu.", "note": "TUZAK: röntgen = cihaz", "split": "holdout4"}
+{"id": "IP-P20", "group": "false_positive_control", "injury": false, "channel": "email", "text": "Dikiş atölyesinin servis aracına çarptım.", "note": "TUZAK: dikiş = terzilik", "split": "holdout4"}
+{"id": "IP-P21", "group": "false_positive_control", "injury": false, "channel": "call_transcript", "text": "Müşteri: Fizyoterapi merkezinin bariyerine vurdum.", "note": "TUZAK: fizyoterapi = kurum", "split": "holdout4"}
+{"id": "IP-P22", "group": "false_positive_control", "injury": false, "channel": "web_form", "text": "Açıklama: Yoğun bakım yönlendirme direğine çarptım.", "note": "TUZAK: yoğun bakım = tabela", "split": "holdout4"}
+{"id": "IP-P23", "group": "false_positive_control", "injury": false, "channel": "email", "text": "Ağrı kesici satan eczanenin tabelası aracın üstüne düştü.", "note": "TUZAK: ağrı kesici + eczane, kişi yok", "split": "holdout4"}
+{"id": "IP-P24", "group": "false_positive_control", "injury": false, "channel": "email", "text": "Ameliyat masası taşıyan kamyonete çarptım.", "note": "TUZAK: ameliyat = mobilya", "split": "holdout4"}
+{"id": "IP-P25", "group": "false_positive_control", "injury": false, "channel": "call_transcript", "text": "Müşteri: Pansuman malzemesi taşıyan kamyonet arkadan çarptı.", "note": "TUZAK: pansuman = yük", "split": "holdout4"}
+{"id": "IP-P26", "group": "false_positive_control", "injury": false, "channel": "web_form", "text": "Açıklama: İstirahat tesislerinin otoparkında çizdiler.", "note": "TUZAK: istirahat = tesis adı", "split": "holdout4"}
+{"id": "IP-P27", "group": "false_positive_control", "injury": false, "channel": "email", "text": "Taburcu Sokak'ta park halindeyken çarptılar.", "note": "TUZAK: taburcu = sokak adı", "split": "holdout4"}
+{"id": "IP-P28", "group": "false_positive_control", "injury": false, "channel": "email", "text": "Kan bağışı otobüsüne çarptım.", "note": "TUZAK: kan = bağış kampanyası", "split": "holdout4"}
+{"id": "IP-P29", "group": "ascii_fold", "injury": true, "channel": "email", "text": "Korse taktilar.", "note": "P01'in Türkçe karaktersiz hâli", "split": "holdout4"}
+{"id": "IP-P30", "group": "ascii_fold", "injury": true, "channel": "call_transcript", "text": "Müşteri: Tomografi cektiler.", "note": "P03'ün Türkçe karaktersiz hâli", "split": "holdout4"}

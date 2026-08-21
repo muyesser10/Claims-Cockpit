@@ -39,6 +39,13 @@ and has automated nothing. The §7 auto-approval row was being reported as a
 counterfactual — the number the gate *would* reach if the flag were off — because
 the real number was not worth reporting.
 
+*Measured 2026-08-19, after this ADR was accepted.* The first gate run to record
+the flag per record put the counterfactual beside the shipped number instead of
+estimating it: 64/100 approved at 96.9% precision, and **1/100** with the flag
+blocking. The estimate above was not off, and the sweep now prints the row
+whenever a run carries the flag, so this stays a measurement rather than a
+sentence in a document.
+
 **And the human it routed to was not shown the flag.** Nothing in `web/src/` or
 `api/` reads `masking_sanity_flags`; the Kuyruk detail panel gives the operator
 no indication that masking was suspected of leaking. So the rule did not buy a

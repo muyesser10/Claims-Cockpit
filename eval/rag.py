@@ -39,6 +39,7 @@ from dotenv import load_dotenv
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session
 
+from eval.loader import corpus_fingerprint
 from worker.llm.client import ModelTier
 from worker.rag.answer import PROMPT_PATH as ANSWER_PROMPT_PATH
 from worker.rag.ask import ask
@@ -293,6 +294,11 @@ def write_run(outcomes: list[Outcome], path: Path, *, meta: dict | None = None) 
         "meta": {
             "run_at": datetime.now(UTC).isoformat(),
             "questions": len(outcomes),
+            # The corpus the answers were checked against. A RAG number outlives
+            # its corpus more quietly than the others: the questions still parse
+            # and the SQL still runs, so a stale run looks exactly like a fresh
+            # one.
+            "corpus": corpus_fingerprint(),
             # All four, because a question passes through several of them and any
             # one can be the reason a number moved. The Text-to-SQL prompt went
             # v1 -> v3 while the last committed run stayed at v1, and nothing in

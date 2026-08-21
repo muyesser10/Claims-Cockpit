@@ -184,7 +184,18 @@ _INFLECTED = re.compile(r"^[a-z]")
 #    collision with a vehicle and is the exact shape this guard exists to stop;
 #    admitting the stem would readmit that false positive to catch a phrasing
 #    ("hastaneye taşındı") that the dative in check 1 already covers.
-_CARE_ACTION = re.compile(r"(cagir|cagr|geld|gelm|kaldir|gotur|sevk|mudahale)")
+#    The second group is treatment rather than transport, and closes the shape
+#    holdout3 measured: a bare term with the verb doing the work ("korse
+#    taktılar", "röntgen çektiler", "istirahat yazdılar"). Each stem is narrow on
+#    purpose. "baglad" rather than "bagla", because "bağlantı" folds to
+#    "baglanti" and "hastane bağlantı yolu" is a road, not a patient. "yapt" and
+#    "at" are absent for the same reason at greater cost: "kaza yaptım" and
+#    "hasar attı" would turn every term in the window into an injury, so
+#    "ameliyat yaptılar" and "dikiş attılar" stay unreachable here and are left
+#    to the model.
+_CARE_ACTION = re.compile(
+    r"(cagir|cagr|geld|gelm|kaldir|gotur|sevk|mudahale|takt|verd|cekt|baglad|yazd)"
+)
 
 # How far past the term to look for the verb. Turkish puts it last, so it follows
 # the noun it acts on.
