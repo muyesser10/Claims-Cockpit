@@ -121,3 +121,32 @@ def test_non_ambiguous_name_still_masked_unconditionally():
     masked, mappings = mask_names("Ahmet aradi")
     assert "[NAME_1]" in masked
     assert mappings[0]["real_value"] == "Ahmet"
+
+
+# --- the governance rule, enforced rather than trusted ---------------------
+
+
+def test_no_holdout_name_reaches_the_masking_dictionary():
+    """Eval's holdout names must never enter the masking dictionary, or masking
+    recall measures itself (name_dict.py's module comment states the rule).
+
+    Compared **folded**, because that is how the lookup compares. An exact-match
+    check passes this file today and still misses the leak: the 2026-08-19
+    surname import added `Yigit` and `Gençer`, which are distinct strings from
+    the holdout's `Yiğit` and `Gencer` and the same key once fold_tr_ascii has
+    run. Two of 186 holdout names would have been masked for a circular reason.
+    """
+    from pathlib import Path
+
+    from worker.shared.text_norm import fold_tr_ascii
+
+    dict_dir = Path(__file__).resolve().parents[2] / "data" / "dictionaries"
+
+    def folded(name: str) -> set[str]:
+        raw = (dict_dir / name).read_text(encoding="utf-8").splitlines()
+        return {fold_tr_ascii(line.strip()) for line in raw if line.strip()}
+
+    dictionary = folded("turkish_names.txt")
+    for holdout in ("holdout_first_names.txt", "holdout_last_names.txt"):
+        collisions = sorted(folded(holdout) & dictionary)
+        assert not collisions, f"{holdout} leaked into the masking dictionary: {collisions}"

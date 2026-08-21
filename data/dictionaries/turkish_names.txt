@@ -622,7 +622,6 @@ Gemici
 Gencaslan
 Genç
 Gençay
-Gençer
 Geray
 Gezer
 Gilman
@@ -1613,7 +1612,6 @@ Yetişal
 Yetkin
 Yeşil
 Yeşilyurt
-Yigit
 Yilmaz
 Yolal
 Yorulmaz

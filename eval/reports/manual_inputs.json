@@ -24,20 +24,19 @@
     "their own. Set when the file was produced; eval/report.py reads it so those",
     "rows are dated like every other row."
   ],
-
   "p95_latency": {
-    "value_seconds": 10.95,
-    "sample_n": 43,
+    "value_seconds": 12.11,
+    "sample_n": 150,
     "sample_description": "pipeline'dan geçmiş ihbarlar (denetim izi olan tüm kayıtlar)",
     "source": "audit_trail",
-    "measured_at": "2026-08-09",
+    "measured_at": "2026-08-19",
     "notes": [
-      "Mesaj başına adım sürelerinin toplamı üzerinden; medyan 4,92 sn.",
-      "Kapsam, denetim izi bulunan kayıtlar. Veritabanındaki ilk 57 ihbar seed betiğiyle doğrudan yazıldığı için pipeline'dan hiç geçmemiştir ve bu ölçümün dışındadır."
+      "Mesaj başına adım sürelerinin toplamı üzerinden; medyan 8,18 sn, ortalama 8,16 sn.",
+      "PR #75 sonrası yeniden ölçüldü: veritabanı boşaltılıp yeni korpusun ilk 150 kaydı gerçek pipeline'dan (replay/ → /ingest → worker) geçirildi, yani ölçümün tamamı canlı koşudan geliyor — önceki 43 kayıtlık ölçümde olduğu gibi seed betiğiyle doğrudan yazılmış kayıt yok.",
+      "Önceki değer 10,95 sn (n=43, 2026-08-09). Artış örneklemin tamamının pipeline'dan geçmesinden ve mesaj başına üç LLM çağrısından geliyor; hedefin (≤60 sn) çok altında."
     ]
   },
-
   "provenance": {
-    "masking_recall.json": "2026-08-09"
+    "masking_recall.json": "2026-08-19"
   }
 }
