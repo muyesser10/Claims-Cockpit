@@ -6,6 +6,7 @@ every test passes a stub, so these run in CI with no API key and cost nothing.
 """
 
 import pytest
+from prometheus_client import REGISTRY
 from pydantic import BaseModel
 
 from worker.llm.client import (
@@ -22,6 +23,14 @@ class Answer(BaseModel):
     """A throwaway response model, standing in for ClaimExtraction."""
 
     value: str
+
+
+class _StubUsage:
+    """What OpenAI reports back about billing. Either field can be absent."""
+
+    def __init__(self, prompt_tokens=None, completion_tokens=None):
+        self.prompt_tokens = prompt_tokens
+        self.completion_tokens = completion_tokens
 
 
 class _StubCompletion:
@@ -222,3 +231,125 @@ def test_failures_are_raised_not_swallowed():
             user_content="user",
             message_id="GT-000002",
         )
+
+
+# --- Prometheus counters -----------------------------------------------------
+#
+# The registry is global and shared with every other test in the run, so each
+# test below pins its own model name. That makes the series it reads its own,
+# and the assertions absolute rather than deltas.
+
+
+def _tokens(model: str, tier: str, kind: str):
+    """One llm_tokens_total series, or None when it was never incremented.
+
+    None is the assertion that matters for the skip cases: a series that does
+    not exist is different from one sitting at zero.
+    """
+    return REGISTRY.get_sample_value(
+        "llm_tokens_total", {"model": model, "tier": tier, "kind": kind}
+    )
+
+
+def _calls(model: str, tier: str, outcome: str):
+    return REGISTRY.get_sample_value(
+        "llm_calls_total", {"model": model, "tier": tier, "outcome": outcome}
+    )
+
+
+def _ask(client) -> None:
+    client.structured(
+        tier=ModelTier.CHEAP,
+        response_model=Answer,
+        system_prompt="sys",
+        user_content="user",
+        message_id="GT-000002",
+    )
+
+
+def test_reported_usage_reaches_the_token_counter():
+    """The two numbers the cost panel multiplies come from completion.usage."""
+    completions = _StubCompletions(
+        answer=Answer(value="ok"),
+        usage=_StubUsage(prompt_tokens=3970, completion_tokens=300),
+    )
+    _ask(_client_with(completions, cheap_model="metrics-both"))
+
+    assert _tokens("metrics-both", "cheap", "prompt") == 3970
+    assert _tokens("metrics-both", "cheap", "completion") == 300
+    assert _calls("metrics-both", "cheap", "ok") == 1
+
+
+def test_tokens_accumulate_across_calls():
+    """A Counter, not a Gauge: two calls bill twice."""
+    completions = _StubCompletions(
+        answer=Answer(value="ok"),
+        usage=_StubUsage(prompt_tokens=100, completion_tokens=10),
+    )
+    client = _client_with(completions, cheap_model="metrics-twice")
+    _ask(client)
+    _ask(client)
+
+    assert _tokens("metrics-twice", "cheap", "prompt") == 200
+    assert _calls("metrics-twice", "cheap", "ok") == 2
+
+
+def test_missing_usage_counts_the_call_but_no_tokens():
+    """DEMO_OFFLINE's recorded answers report no usage at all.
+
+    Counting them as zero tokens would put a free call and a call of unknown
+    cost in the same bucket, and the cost panel would read as if the pipeline
+    had run for nothing.
+    """
+    completions = _StubCompletions(answer=Answer(value="ok"), usage=None)
+    _ask(_client_with(completions, cheap_model="metrics-no-usage"))
+
+    assert _tokens("metrics-no-usage", "cheap", "prompt") is None
+    assert _tokens("metrics-no-usage", "cheap", "completion") is None
+    assert _calls("metrics-no-usage", "cheap", "ok") == 1
+
+
+def test_a_half_reported_usage_counts_only_the_half_that_exists():
+    """Each field is checked on its own; one missing must not drop the other."""
+    completions = _StubCompletions(
+        answer=Answer(value="ok"),
+        usage=_StubUsage(prompt_tokens=512, completion_tokens=None),
+    )
+    _ask(_client_with(completions, cheap_model="metrics-half"))
+
+    assert _tokens("metrics-half", "cheap", "prompt") == 512
+    assert _tokens("metrics-half", "cheap", "completion") is None
+
+
+def test_a_failed_call_is_counted_as_an_error():
+    """An outage has to show up as failures, not as a gap in the graph."""
+    completions = _StubCompletions(error=TimeoutError("upstream timed out"))
+    client = _client_with(completions, cheap_model="metrics-error")
+
+    with pytest.raises(TimeoutError):
+        _ask(client)
+
+    assert _calls("metrics-error", "cheap", "error") == 1
+    assert _calls("metrics-error", "cheap", "ok") is None
+    assert _tokens("metrics-error", "cheap", "prompt") is None
+
+
+def test_the_tier_label_separates_the_two_models():
+    """Cheap and strong are billed at different rates; the label is what the
+    cost query splits on."""
+    completions = _StubCompletions(
+        answer=Answer(value="ok"),
+        usage=_StubUsage(prompt_tokens=40, completion_tokens=4),
+    )
+    client = _client_with(completions, strong_model="metrics-strong")
+
+    client.structured(
+        tier=ModelTier.STRONG,
+        response_model=Answer,
+        system_prompt="sys",
+        user_content="user",
+        message_id="GT-000002",
+    )
+
+    assert _tokens("metrics-strong", "strong", "prompt") == 40
+    assert _tokens("metrics-strong", "cheap", "prompt") is None

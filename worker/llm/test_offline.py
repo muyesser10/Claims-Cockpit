@@ -9,6 +9,7 @@ committed set is usable.
 import json
 
 import pytest
+from prometheus_client import REGISTRY
 from pydantic import BaseModel
 
 from worker.llm.client import (
@@ -166,6 +167,41 @@ def test_it_works_through_a_real_LlmClient(tmp_path, monkeypatch):
     )
 
     assert result.value == "wildcard"
+
+
+def test_an_offline_call_bills_no_tokens(tmp_path, monkeypatch):
+    """A recorded answer cost nothing, and the cost panel must say so.
+
+    FixtureCompletions returns completion=None, so there is no usage to read.
+    The call is still counted — the demo does run the real pipeline — but no
+    token series may appear for it, or a fully offline demo would report a bill.
+    """
+    monkeypatch.setenv("DEMO_OFFLINE", "true")
+    write_fixtures(tmp_path, [entry("*", "wildcard")])
+
+    client = get_llm_client()
+    client.client = FixtureCompletions(directory=tmp_path)
+
+    labels = {"model": OFFLINE_CHEAP_MODEL, "tier": "cheap", "outcome": "ok"}
+    before = REGISTRY.get_sample_value("llm_calls_total", labels) or 0
+
+    client.structured(
+        tier=ModelTier.CHEAP,
+        response_model=Answer,
+        system_prompt="prompt",
+        user_content="content",
+        message_id="GT-TEST",
+    )
+
+    assert REGISTRY.get_sample_value("llm_calls_total", labels) == before + 1
+    for kind in ("prompt", "completion"):
+        assert (
+            REGISTRY.get_sample_value(
+                "llm_tokens_total",
+                {"model": OFFLINE_CHEAP_MODEL, "tier": "cheap", "kind": kind},
+            )
+            is None
+        )
 
 
 # --- loading errors ----------------------------------------------------------

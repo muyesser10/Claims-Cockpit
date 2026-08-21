@@ -10,6 +10,8 @@ correctly typed, and can be incremented/observed/set without raising.
 from prometheus_client import generate_latest
 
 from worker.metrics import (
+    llm_calls_total,
+    llm_tokens_total,
     worker_messages_failed_total,
     worker_messages_processed_total,
     worker_processing_duration_seconds,
@@ -33,3 +35,20 @@ def test_worker_metrics_appear_in_exposition_output():
     assert "worker_messages_failed_total" in output
     assert "worker_processing_duration_seconds" in output
     assert "worker_queue_depth" in output
+
+
+def test_llm_metrics_can_be_recorded_without_raising():
+    """Both label sets, so a typo in a label name fails here and not in prod."""
+    llm_tokens_total.labels(model="gpt-4o-mini", tier="cheap", kind="prompt").inc(120)
+    llm_tokens_total.labels(model="gpt-4o-mini", tier="cheap", kind="completion").inc(8)
+    llm_calls_total.labels(model="gpt-4o-mini", tier="cheap", outcome="ok").inc()
+    llm_calls_total.labels(model="gpt-4o", tier="strong", outcome="error").inc()
+
+
+def test_llm_metrics_appear_in_exposition_output():
+    """These two are also exported by the rag service, which loads the same
+    worker/llm/client.py into the same global registry."""
+    output = generate_latest().decode()
+
+    assert "llm_tokens_total" in output
+    assert "llm_calls_total" in output
